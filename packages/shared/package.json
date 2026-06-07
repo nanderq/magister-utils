@@ -1,0 +1,15 @@
+{
+  "name": "@magister/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./magister": "./src/magister.ts",
+    "./presenters": "./src/presenters.ts",
+    "./setup": "./src/setup.ts"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0"
+  }
+}

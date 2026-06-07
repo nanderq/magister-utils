@@ -1,0 +1,28 @@
+{
+  "name": "magister-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.10",
+  "workspaces": ["apps/*", "packages/*"],
+  "overrides": {
+    "kysely": "0.28.17"
+  },
+  "scripts": {
+    "build": "bun run build:mcli && bun run build:mtui && bun run build:mcp",
+    "build:mcli": "bun run --cwd apps/mcli build",
+    "build:mcp": "bun run --cwd apps/mcp build",
+    "build:mtui": "bun run --cwd apps/mtui build",
+    "dev": "bun run apps/mcli/src/index.ts",
+    "dev:mcp": "bun run --cwd apps/mcp dev",
+    "mcli": "bun run apps/mcli/src/index.ts",
+    "mtui": "bun run apps/mtui/src/index.tsx",
+    "setup": "bun run apps/mcli/src/index.ts setup",
+    "tui": "bun run apps/mtui/src/index.tsx"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "bun-types": "latest",
+    "typescript": "^5.9.3"
+  }
+}

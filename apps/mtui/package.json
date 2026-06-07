@@ -1,0 +1,19 @@
+{
+  "name": "mtui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mtui": "./src/index.tsx"
+  },
+  "scripts": {
+    "build": "bun build --compile --outfile ../../dist/mtui src/index.tsx --target bun",
+    "dev": "bun run src/index.tsx"
+  },
+  "dependencies": {
+    "@magister/shared": "workspace:*",
+    "ink": "^7.0.0",
+    "react": "^19.2.5",
+    "react-devtools-core": "^6.1.2"
+  }
+}

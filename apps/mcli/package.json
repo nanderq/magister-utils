@@ -1,0 +1,16 @@
+{
+  "name": "mcli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mcli": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun build --compile --outfile ../../dist/mcli src/index.ts --external typescript",
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@magister/shared": "workspace:*"
+  }
+}

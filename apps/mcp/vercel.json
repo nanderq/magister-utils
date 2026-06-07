@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "cd ../.. && PUPPETEER_SKIP_DOWNLOAD=true bun install",
+  "buildCommand": "bun run build",
+  "functions": {
+    "src/app/api/mcp/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
