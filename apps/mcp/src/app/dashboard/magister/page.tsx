@@ -28,7 +28,11 @@ export default async function MagisterPage() {
     <MotionPage>
       <header className={pageHead}>
         <div>
-          <h1>Magister account</h1>
+          <h1>
+            Your Magister
+            <br />
+            <span>account.</span>
+          </h1>
         </div>
       </header>
       <MotionSection className={cardGrid}>

@@ -9,7 +9,6 @@ import { getApiKeyStatus } from "@/lib/security/api-key-repository";
 import {
   card,
   cardGrid,
-  codeBlock,
   meta,
   pageHead,
   status,
@@ -25,7 +24,9 @@ export default async function ApiKeyPage() {
     <MotionPage>
       <header className={pageHead}>
         <div>
-          <h1>API key</h1>
+          <h1>
+            Your API key.
+          </h1>
         </div>
       </header>
       <MotionSection className={cardGrid}>

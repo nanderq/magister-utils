@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { CopyButton } from "@/components/copy-button";
+import { RotateAndCopyKeyButton } from "@/components/rotate-and-copy-key-button";
 import {
   MotionCard,
   MotionPage,
@@ -13,7 +14,6 @@ import { getApiKeyStatus } from "@/lib/security/api-key-repository";
 import {
   card,
   cardGrid,
-  codeBlock,
   pageHead,
   secondaryButton,
   status,
@@ -24,6 +24,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const firstName = user.name.trim().split(/\s+/)[0] || "there";
   const [connection, key] = await Promise.all([
     getMagisterConnection(user.id),
     getApiKeyStatus(user.id),
@@ -34,7 +35,11 @@ export default async function DashboardPage() {
     <MotionPage>
       <header className={pageHead}>
         <div>
-          <h1>Welcome back</h1>
+          <h1>
+            Welcome back,
+            <br />
+            <span className="text-[#848a80]">{firstName}</span>
+          </h1>
         </div>
       </header>
       <MotionSection className={cardGrid}>
@@ -68,21 +73,27 @@ export default async function DashboardPage() {
               ? `Created ${key.createdAt.toLocaleString()}. Last used ${key.lastUsedAt?.toLocaleString() ?? "never"}.`
               : "Create a bearer key, then add it to your MCP client configuration."}
           </p>
-          <Link
-            className={`${secondaryButton} mt-6`}
-            href="/dashboard/api-key"
-          >
-            Manage API key
-            <ArrowRight aria-hidden="true" />
-          </Link>
+          <div className="mt-6 flex flex-wrap items-start gap-3">
+            <Link className={secondaryButton} href="/dashboard/api-key">
+              Manage API key
+              <ArrowRight aria-hidden="true" />
+            </Link>
+            {key && <RotateAndCopyKeyButton />}
+          </div>
         </MotionCard>
-        <MotionCard className={`${card} col-span-full max-[760px]:col-auto`}>
-          <p>Use this endpoint in your configuration:</p>
-          <div className="mt-5 flex items-center gap-3 max-[760px]:items-start">
-            <h2 className="m-0 [overflow-wrap:anywhere] text-[27px] font-semibold tracking-[-0.035em]">
+        <MotionCard
+          className={`${card} col-span-full mt-8 max-[760px]:col-auto`}
+        >
+          <p>Use this endpoint in your client configuration.</p>
+          <div className="mt-5 flex items-center gap-4 max-[760px]:flex-col max-[760px]:items-start">
+            <h2 className="m-0 [overflow-wrap:anywhere] text-[clamp(22px,3vw,34px)] font-medium tracking-[-0.04em] text-[#dfe3d9]">
               {endpoint}
             </h2>
             <CopyButton value={endpoint} />
+            <Link className={secondaryButton} href="/dashboard/examples">
+              More examples
+              <ArrowRight aria-hidden="true" />
+            </Link>
           </div>
         </MotionCard>
       </MotionSection>

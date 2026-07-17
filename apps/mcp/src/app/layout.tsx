@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html className="bg-[#17211d]" lang="en">
-      <body className="m-0 bg-white font-sans text-[#17211d]">
+    <html className="bg-[#080a09] [color-scheme:dark]" lang="en">
+      <body className="m-0 bg-[#080a09] font-sans text-[#f2f4ed]">
         <MotionProvider>{children}</MotionProvider>
       </body>
     </html>

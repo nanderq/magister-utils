@@ -9,157 +9,164 @@ import {
   MotionSection,
 } from "@/components/motion-primitives";
 
+const steps = [
+  {
+    number: "01",
+    title: "Sign in",
+    description: "Create your secure MMCP account with Google.",
+    icon: LogIn,
+  },
+  {
+    number: "02",
+    title: "Connect Magister",
+    description:
+      "Use Magister’s official login flow. Your password is never shared with us.",
+    icon: Link2,
+  },
+  {
+    number: "03",
+    title: "Start asking",
+    description:
+      "Add your private endpoint to any MCP-compatible assistant and start a conversation.",
+    icon: Check,
+  },
+] as const;
+
 export default async function HomePage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const destination = session ? "/dashboard" : "/auth/signin";
 
   return (
-    <main className="min-h-screen bg-white p-3.5 font-sans text-[#050505] motion-reduce:[&_*]:transition-none motion-reduce:[&_*]:scroll-auto motion-reduce:[&_*::before]:transition-none motion-reduce:[&_*::after]:transition-none max-[650px]:p-2">
+    <main className="relative min-h-screen overflow-hidden bg-[#080a09] font-sans text-[#f2f4ed] selection:bg-[#c8ff4a] selection:text-[#080a09] motion-reduce:[&_*]:transition-none">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 left-1/2 h-[760px] w-[1100px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_top,rgba(126,159,76,0.13),transparent_66%)]"
+      />
+
       <MotionPage>
-      <div className="mx-auto w-full max-w-[1400px]">
-        <header className="flex min-h-[72px] items-center justify-end px-2.5 pb-3.5 max-[650px]:min-h-16">
-          <Link
-            className="inline-flex items-center gap-[9px] text-[13px] font-bold text-[#050505] no-underline [&_svg]:w-4 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-[1.5] [&_svg]:transition-transform [&_svg]:duration-200 hover:[&_svg]:translate-x-1"
-            href={destination}
-          >
-            {session ? "Dashboard" : "Sign in"}
-            <ArrowRight aria-hidden="true" />
-          </Link>
-        </header>
-
-        <section
-          className="flex min-h-[590px] items-center overflow-hidden rounded-[34px] bg-[#f1f1ef] p-[clamp(48px,6vw,82px)] max-[900px]:min-h-0 max-[900px]:px-[34px] max-[900px]:pt-[58px] max-[900px]:pb-9 max-[650px]:rounded-3xl max-[650px]:px-[22px] max-[650px]:pt-[46px] max-[650px]:pb-[42px]"
-          aria-labelledby="hero-title"
-        >
-          <MotionSection>
-            <MotionItem>
-              <h1
-                className="m-0 text-[clamp(62px,7.3vw,116px)] leading-[0.9] font-semibold tracking-[-0.055em] max-[650px]:text-[clamp(52px,16vw,72px)]"
-                id="hero-title"
-              >
-                Your school data.
-                <br />
-                Ready to talk.
-              </h1>
-            </MotionItem>
-            <MotionItem>
-              <p className="my-10 max-w-[600px] text-[clamp(17px,1.5vw,21px)] leading-[1.6] tracking-[-0.015em] text-[#555]">
-                MMCP is a bridge between Magister and your AI assistant.
-                Ask about schedules, grades, assignments, and more.
-              </p>
-            </MotionItem>
-            <MotionItem>
-              <Link
-                className="inline-flex w-fit items-center gap-7 rounded-full border border-[#050505] bg-[#050505] px-6 py-[17px] text-[13px] font-bold text-white no-underline transition-[background,color,transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.14)] [&_svg]:w-4 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-[1.5] [&_svg]:transition-transform [&_svg]:duration-200 hover:[&_svg]:translate-x-1"
-                href={destination}
-              >
-                Connect Magister <ArrowRight aria-hidden="true" />
-              </Link>
-            </MotionItem>
-          </MotionSection>
-        </section>
-
-        <section
-          className="px-[clamp(24px,7vw,100px)] py-[clamp(72px,8vw,112px)] max-[650px]:px-3.5 max-[650px]:py-[72px]"
-          aria-labelledby="how-title"
-        >
-          <MotionSection className="mb-16 max-[650px]:mb-12">
-            <MotionItem>
-            <h2
-              className="m-0 text-[clamp(50px,6vw,88px)] leading-[0.95] font-semibold tracking-[-0.055em]"
-              id="how-title"
+        <div className="relative mx-auto w-full max-w-[1440px] px-6 sm:px-10 lg:px-14">
+          <header className="flex h-24 items-center justify-between border-b border-white/10">
+            <Link
+              className="inline-flex items-center text-[13px] font-semibold tracking-[0.16em] text-[#f2f4ed] uppercase no-underline"
+              href="/"
             >
-              Three steps.
-              <br />
-              One connection.
-            </h2>
-            </MotionItem>
-          </MotionSection>
-          <MotionSection className="grid grid-cols-3 border-t border-[#111] max-[650px]:grid-cols-1 [&_article]:relative [&_article]:min-h-[300px] [&_article]:border-r [&_article]:border-[#d5d5d2] [&_article]:px-9 [&_article]:py-8 [&_article:first-child]:pl-0 [&_article:last-child]:border-r-0 max-[650px]:[&_article]:min-h-0 max-[650px]:[&_article]:border-r-0 max-[650px]:[&_article]:border-b max-[650px]:[&_article]:px-1 max-[650px]:[&_article]:pt-7 max-[650px]:[&_article]:pb-12">
-            <MotionItem>
-            <article>
-              <span className="font-mono text-[10px] leading-none font-bold text-[#777]">
-                01
-              </span>
-              <div className="my-7 mt-11 grid size-[52px] place-items-center rounded-2xl border border-[#111] max-[650px]:my-6 max-[650px]:mt-7 [&_svg]:size-[21px] [&_svg]:stroke-[1.6]">
-                <LogIn aria-hidden="true" />
-              </div>
-              <h3 className="mb-3 text-[27px] font-semibold tracking-[-0.03em]">
-                Sign in
-              </h3>
-              <p className="m-0 max-w-[300px] text-sm leading-[1.6] text-[#666]">
-                Use Google to create your secure Magister MCP account.
-              </p>
-            </article>
-            </MotionItem>
-            <MotionItem>
-            <article>
-              <span className="font-mono text-[10px] leading-none font-bold text-[#777]">
-                02
-              </span>
-              <div className="my-7 mt-11 grid size-[52px] place-items-center rounded-2xl border border-[#111] max-[650px]:my-6 max-[650px]:mt-7 [&_svg]:size-[21px] [&_svg]:stroke-[1.6]">
-                <Link2 aria-hidden="true" />
-              </div>
-              <h3 className="mb-3 text-[27px] font-semibold tracking-[-0.03em]">
-                Connect
-              </h3>
-              <p className="m-0 max-w-[300px] text-sm leading-[1.6] text-[#666]">
-                Link Magister through its official login flow. Your password is
-                never shared.
-              </p>
-            </article>
-            </MotionItem>
-            <MotionItem>
-            <article>
-              <span className="font-mono text-[10px] leading-none font-bold text-[#777]">
-                03
-              </span>
-              <div className="my-7 mt-11 grid size-[52px] place-items-center rounded-2xl border border-[#111] max-[650px]:my-6 max-[650px]:mt-7 [&_svg]:size-[21px] [&_svg]:stroke-[1.6]">
-                <Check aria-hidden="true" />
-              </div>
-              <h3 className="mb-3 text-[27px] font-semibold tracking-[-0.03em]">
-                Start asking
-              </h3>
-              <p className="m-0 max-w-[300px] text-sm leading-[1.6] text-[#666]">
-                Add your private endpoint to any MCP-compatible assistant.
-              </p>
-            </article>
-            </MotionItem>
-          </MotionSection>
-        </section>
+              MMCP
+            </Link>
 
-        <section
-          className="flex min-h-[650px] flex-col items-center justify-center rounded-[34px] bg-[#050505] px-6 pt-[90px] pb-8 text-center text-white max-[650px]:min-h-[620px] max-[650px]:rounded-3xl max-[650px]:px-[18px] max-[650px]:pt-20 max-[650px]:pb-[26px]"
-          aria-labelledby="cta-title"
-        >
-          <MotionSection>
-            <MotionItem>
-              <h2
-                className="m-0 text-[clamp(54px,7vw,104px)] leading-[0.92] font-semibold tracking-[-0.055em] max-[650px]:text-[clamp(48px,14vw,68px)]"
-                id="cta-title"
-              >
-                Make your school day
-                <br />
-                easier to understand.
-              </h2>
-            </MotionItem>
-            <MotionItem>
-              <p className="my-10 text-[17px] text-[#aaa]">
-                Connect once. Ask whenever you need clarity.
-              </p>
-            </MotionItem>
-            <MotionItem>
-              <Link
-                className="inline-flex w-fit items-center gap-7 rounded-full border border-white bg-white px-6 py-[17px] text-[13px] font-bold text-[#050505] no-underline transition-[background,color,transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(255,255,255,0.12)] [&_svg]:w-4 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-[1.5] [&_svg]:transition-transform [&_svg]:duration-200 hover:[&_svg]:translate-x-1"
-                href={destination}
-              >
-                {session ? "Open dashboard" : "Get started"}
-                <ArrowRight aria-hidden="true" />
-              </Link>
-            </MotionItem>
-          </MotionSection>
-        </section>
-      </div>
+            <Link
+              className="group inline-flex items-center gap-2.5 text-[13px] font-medium text-[#d7dbd0] no-underline transition-colors duration-300 hover:text-white [&_svg]:size-4 [&_svg]:stroke-[1.5] [&_svg]:transition-transform [&_svg]:duration-300 hover:[&_svg]:translate-x-1"
+              href={destination}
+            >
+              {session ? "Dashboard" : "Sign in"}
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </header>
+
+          <section
+            className="grid min-h-[calc(100svh-6rem)] grid-cols-1 content-center py-24 lg:grid-cols-12 lg:py-28"
+            aria-labelledby="hero-title"
+          >
+            <MotionSection className="lg:col-span-11">
+              <MotionItem>
+                <h1
+                  className="m-0 max-w-[1250px] text-[clamp(4rem,10.7vw,9.6rem)] leading-[0.84] font-semibold tracking-[-0.065em]"
+                  id="hero-title"
+                >
+                  Your school day.
+                  <br />
+                  <span className="text-[#848a80]">Finally clear.</span>
+                </h1>
+              </MotionItem>
+
+              <div className="mt-14 grid gap-10 lg:mt-20 lg:grid-cols-12 lg:items-end">
+                <MotionItem className="lg:col-span-5">
+                  <p className="m-0 max-w-[540px] text-[clamp(17px,1.6vw,22px)] leading-[1.55] tracking-[-0.02em] text-[#adb2a8]">
+                    Ask about schedules, grades, and assignments in plain
+                    language. MMCP turns your Magister data into a conversation.
+                  </p>
+                  <Link
+                    className="group mt-8 inline-flex w-fit items-center gap-5 border-b border-[#c8ff4a] pb-2 text-[13px] font-semibold text-[#f2f4ed] no-underline transition-colors duration-300 hover:text-[#c8ff4a] [&_svg]:size-4 [&_svg]:stroke-[1.5] [&_svg]:transition-transform [&_svg]:duration-300 hover:[&_svg]:translate-x-1"
+                    href={destination}
+                  >
+                    Connect Magister
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                </MotionItem>
+              </div>
+            </MotionSection>
+          </section>
+
+          <section
+            className="border-t border-white/10 py-24 lg:py-36"
+            aria-labelledby="how-title"
+          >
+            <MotionSection className="mb-16 grid gap-8 lg:mb-24 lg:grid-cols-12">
+              <MotionItem className="lg:col-span-9">
+                <h2
+                  className="m-0 max-w-[820px] text-[clamp(3rem,6.5vw,6.5rem)] leading-[0.94] font-semibold tracking-[-0.055em]"
+                  id="how-title"
+                >
+                  One connection.
+                  <br />
+                  Everything in reach.
+                </h2>
+              </MotionItem>
+            </MotionSection>
+
+            <MotionSection className="border-t border-white/15">
+              {steps.map(({ number, title, description, icon: Icon }) => (
+                <MotionItem key={number}>
+                  <article className="group grid gap-5 border-b border-white/15 py-8 transition-colors duration-300 hover:border-white/35 sm:grid-cols-[64px_1fr_auto] sm:items-center lg:grid-cols-12 lg:py-10">
+                    <span className="font-mono text-[10px] text-[#6f756b] lg:col-span-1">
+                      {number}
+                    </span>
+                    <h3 className="m-0 text-[clamp(1.8rem,3.2vw,3.4rem)] font-medium tracking-[-0.045em] sm:col-start-2 lg:col-span-4">
+                      {title}
+                    </h3>
+                    <p className="m-0 max-w-[470px] text-[15px] leading-[1.65] text-[#92998e] sm:col-start-2 lg:col-span-5 lg:col-start-7">
+                      {description}
+                    </p>
+                    <Icon
+                      aria-hidden="true"
+                      className="hidden size-5 stroke-[1.25] text-[#c8ff4a] transition-transform duration-300 group-hover:translate-x-1 sm:block lg:col-span-1 lg:col-start-12 lg:justify-self-end"
+                    />
+                  </article>
+                </MotionItem>
+              ))}
+            </MotionSection>
+          </section>
+
+          <section
+            className="border-t border-white/10 py-28 lg:py-44"
+            aria-labelledby="cta-title"
+          >
+            <MotionSection className="grid gap-12 lg:grid-cols-12 lg:items-end">
+              <MotionItem className="lg:col-span-9">
+                <h2
+                  className="m-0 text-[clamp(3.8rem,8.8vw,8.5rem)] leading-[0.86] font-semibold tracking-[-0.065em]"
+                  id="cta-title"
+                >
+                  Less searching.
+                  <br />
+                  <span className="text-[#848a80]">More knowing.</span>
+                </h2>
+              </MotionItem>
+              <MotionItem className="lg:col-span-3 lg:pb-2">
+                <p className="mt-0 mb-8 text-[15px] leading-[1.6] text-[#92998e]">
+                  Connect once. Ask whenever you need clarity.
+                </p>
+                <Link
+                  className="group inline-flex w-fit items-center gap-5 text-[14px] font-semibold text-[#c8ff4a] no-underline [&_svg]:size-5 [&_svg]:stroke-[1.5] [&_svg]:transition-transform [&_svg]:duration-300 hover:[&_svg]:translate-x-1"
+                  href={destination}
+                >
+                  {session ? "Open dashboard" : "Get started"}
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              </MotionItem>
+            </MotionSection>
+          </section>
+
+        </div>
       </MotionPage>
     </main>
   );

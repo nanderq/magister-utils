@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { KeyRound, LayoutDashboard, Link2 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { DashboardNav } from "@/components/dashboard-nav";
 import { SignOutButton } from "@/components/sign-out-button";
 import { requireUser } from "@/lib/auth/session";
 
-const shell = "mx-auto w-[min(1240px,calc(100%_-_24px))]";
+const shell = "mx-auto w-full max-w-[1320px] px-6 sm:px-10 lg:px-14";
 
 export default async function DashboardLayout({
   children,
@@ -13,38 +13,31 @@ export default async function DashboardLayout({
   children: ReactNode;
 }) {
   await requireUser();
+
   return (
-    <div className="min-h-screen bg-white px-3.5 pb-6 text-[#050505]">
-      <nav className="bg-white text-[#050505]">
-        <div
-          className={`${shell} flex min-h-[84px] items-center justify-between border-b border-[#e7e7e3]`}
-        >
-          <Link
-            className="inline-flex items-center gap-[9px] text-[15px] leading-none font-bold tracking-[-0.025em] no-underline [&_svg]:size-[18px] [&_svg]:stroke-[1.8]"
-            href="/dashboard"
-          >
-            MMCP
-          </Link>
-          <div className="flex gap-8 text-xs leading-none font-bold text-[#666] max-[760px]:hidden [&_a]:inline-flex [&_a]:items-center [&_a]:gap-2 [&_a]:py-3 [&_a]:no-underline [&_a]:transition-colors [&_a:hover]:text-[#050505] [&_svg]:size-3.5 [&_svg]:stroke-[1.8]">
-            <Link href="/dashboard">
-              <LayoutDashboard aria-hidden="true" />
-              Overview
+    <div className="relative min-h-screen overflow-hidden bg-[#080a09] text-[#f2f4ed] selection:bg-[#c8ff4a] selection:text-[#080a09]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 left-1/2 h-[560px] w-[1000px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_top,rgba(126,159,76,0.1),transparent_68%)]"
+      />
+
+      <div className="relative">
+        <header className={shell}>
+          <div className="flex h-24 items-center justify-between border-b border-white/10">
+            <Link
+              className="inline-flex items-center text-[13px] font-semibold tracking-[0.16em] text-[#f2f4ed] uppercase no-underline"
+              href="/"
+            >
+              MMCP
             </Link>
-            <Link href="/dashboard/magister">
-              <Link2 aria-hidden="true" />
-              Magister
-            </Link>
-            <Link href="/dashboard/api-key">
-              <KeyRound aria-hidden="true" />
-              API key
-            </Link>
+            <SignOutButton />
           </div>
-          <SignOutButton />
-        </div>
-      </nav>
-      <main className={`${shell} mt-5 pb-6`}>
-        {children}
-      </main>
+
+          <DashboardNav />
+        </header>
+
+        <main className={`${shell} py-16 sm:py-20 lg:py-28`}>{children}</main>
+      </div>
     </div>
   );
 }
