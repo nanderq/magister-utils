@@ -12,9 +12,11 @@ Next.js dashboard and authenticated remote MCP server for the Magister client in
 
 `TOKEN_ENCRYPTION_KEY` must decode to exactly 32 bytes. Rotating it requires re-encrypting stored Magister tokens.
 
+Set `MAGISTER_AUTH_DEBUG=1` while diagnosing login failures. Authentication traces are written to stderr with credential, cookie, code, state, and token values redacted. Keep it disabled during normal operation.
+
 ## Vercel
 
-Create a Vercel project with `apps/mcp` as its Root Directory. Configure the production Google callback as `https://<domain>/api/auth/callback/google`, add every variable from `.env.example`, and set `PUPPETEER_SKIP_DOWNLOAD=true`.
+Create a Vercel project with `apps/mcp` as its Root Directory. Configure the production Google callback as `https://<domain>/api/auth/callback/google` and add every variable from `.env.example`.
 
 Run migrations as an explicit release step. Configure a Vercel Firewall rate limit for `/api/mcp`; application authentication does not replace platform request throttling.
 

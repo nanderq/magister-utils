@@ -494,7 +494,7 @@ const command = process.argv[2] ?? "";
 // setup is interactive / human-facing — runs outside the JSON dispatch wrapper
 if (command === "setup") {
   await runSetup();
-  process.exit(0);
+  process.exit(process.exitCode ?? 0);
 }
 
 if (!command || !(command in COMMANDS)) {

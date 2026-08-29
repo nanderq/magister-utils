@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@magister/shared": "workspace:*",
-    "ink": "^7.0.0",
-    "react": "^19.2.5",
-    "react-devtools-core": "^6.1.2"
+    "@opentui/core": "^0.4.5",
+    "@opentui/react": "^0.4.5",
+    "react": "^19.2.5"
   }
 }

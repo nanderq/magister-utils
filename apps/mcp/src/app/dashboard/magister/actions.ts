@@ -3,37 +3,27 @@
 import { requireUser } from "@/lib/auth/session";
 import { MagisterConnectionError } from "@/lib/magister/errors";
 import {
-  completeMagisterConnection,
+  connectMagister,
   disconnectMagister,
-  startMagisterConnection,
 } from "@/lib/magister/repository";
+import { redirect } from "next/navigation";
 
 export interface MagisterActionState {
-  loginUrl?: string;
   connected?: boolean;
   error?: string;
 }
 
-export async function startMagisterAction(
+export async function connectMagisterAction(
   _state: MagisterActionState,
   formData: FormData,
 ): Promise<MagisterActionState> {
   try {
     const user = await requireUser();
-    const tenant = String(formData.get("tenant") ?? "");
-    return { loginUrl: await startMagisterConnection(user.id, tenant) };
-  } catch {
-    return { error: "The Magister login could not be started." };
-  }
-}
-
-export async function completeMagisterAction(
-  _state: MagisterActionState,
-  formData: FormData,
-): Promise<MagisterActionState> {
-  try {
-    const user = await requireUser();
-    await completeMagisterConnection(user.id, String(formData.get("consoleOutput") ?? ""));
+    await connectMagister(user.id, {
+      tenant: String(formData.get("tenant") ?? ""),
+      username: String(formData.get("username") ?? ""),
+      password: String(formData.get("password") ?? ""),
+    });
     return { connected: true };
   } catch (error) {
     return {
@@ -47,4 +37,5 @@ export async function completeMagisterAction(
 export async function disconnectMagisterAction() {
   const user = await requireUser();
   await disconnectMagister(user.id);
+  redirect("/dashboard/magister");
 }

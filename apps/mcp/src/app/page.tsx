@@ -20,7 +20,7 @@ const steps = [
     number: "02",
     title: "Connect Magister",
     description:
-      "Use Magister’s official login flow. Your password is never shared with us.",
+      "Use Magister's official login flow. Your password is never shared with us.",
     icon: Link2,
   },
   {

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, useInput } from '../components/primitives.tsx'
 import { MagisterClient, ScheduleItem } from '@magister/shared'
 import { LoadingSpinner } from '../components/LoadingSpinner.tsx'
 import { ErrorBanner } from '../components/ErrorBanner.tsx'

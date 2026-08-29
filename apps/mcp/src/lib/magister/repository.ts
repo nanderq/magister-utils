@@ -1,12 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { and, eq } from "drizzle-orm";
 import {
-  exchangeCodeForTokens,
-  generateLoginURL,
-  generateRandomString,
+  loginWithCredentials,
   MagisterClient,
-  NATIVE_REDIRECT_URI,
+  type MagisterCredentials,
   type Tokens,
 } from "@magister/shared/magister";
 
@@ -16,9 +12,6 @@ import { magisterAuthAttempts, magisterConnections } from "@/lib/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
 
 import { MagisterConnectionError } from "./errors";
-import { extractMagisterRedirectUrl, getRedirectParameter } from "./redirect";
-
-const ATTEMPT_TTL_MS = 10 * 60 * 1000;
 
 function sealTokens(tokens: Tokens, userId: string) {
   return {
@@ -42,13 +35,6 @@ function openTokens(
   };
 }
 
-function safeEqual(left: string, right: string): boolean {
-  const leftBytes = Buffer.from(left, "utf8");
-  const rightBytes = Buffer.from(right, "utf8");
-  if (leftBytes.length !== rightBytes.length) return false;
-  return timingSafeEqual(leftBytes, rightBytes);
-}
-
 export async function getMagisterConnection(userId: string) {
   const [connection] = await getDb()
     .select({
@@ -64,62 +50,16 @@ export async function getMagisterConnection(userId: string) {
   return connection ?? null;
 }
 
-export async function startMagisterConnection(userId: string, tenant?: string) {
-  const codeVerifier = generateRandomString(64);
-  const state = generateRandomString(64);
-  const nonce = generateRandomString(48);
-  const db = getDb();
-
-  await db.delete(magisterAuthAttempts).where(eq(magisterAuthAttempts.userId, userId));
-  await db.insert(magisterAuthAttempts).values({
-    userId,
-    codeVerifier,
-    state,
-    expiresAt: new Date(Date.now() + ATTEMPT_TTL_MS),
-  });
-
-  return generateLoginURL(codeVerifier, {
-    tenant: tenant?.trim() || undefined,
-    redirectUri: NATIVE_REDIRECT_URI,
-    state,
-    nonce,
-  });
-}
-
-export async function completeMagisterConnection(userId: string, consoleOutput: string) {
-  const redirectUrl = extractMagisterRedirectUrl(consoleOutput);
-  if (!redirectUrl) {
-    throw new MagisterConnectionError("INVALID_ARGUMENT", "No Magister redirect URL was found in the pasted console output.");
-  }
-
-  const [attempt] = await getDb()
-    .select()
-    .from(magisterAuthAttempts)
-    .where(eq(magisterAuthAttempts.userId, userId))
-    .limit(1);
-
-  if (!attempt || attempt.expiresAt.getTime() <= Date.now()) {
-    throw new MagisterConnectionError("MAGISTER_AUTH_EXPIRED", "The Magister login attempt expired. Start the connection flow again.");
-  }
-
-  const returnedState = getRedirectParameter(redirectUrl, "state");
-  if (!returnedState || !safeEqual(returnedState, attempt.state)) {
-    throw new MagisterConnectionError("INVALID_ARGUMENT", "The Magister login state did not match this browser session.");
-  }
-
-  const oauthError = getRedirectParameter(redirectUrl, "error");
-  if (oauthError) {
-    throw new MagisterConnectionError("MAGISTER_AUTH_EXPIRED", getRedirectParameter(redirectUrl, "error_description") ?? oauthError);
-  }
-
-  const code = getRedirectParameter(redirectUrl, "code");
-  if (!code) throw new MagisterConnectionError("INVALID_ARGUMENT", "The Magister redirect did not contain an authorization code.");
-
+export async function connectMagister(
+  userId: string,
+  credentials: MagisterCredentials,
+) {
   let tokens: Tokens;
   try {
-    tokens = await exchangeCodeForTokens(code, attempt.codeVerifier, NATIVE_REDIRECT_URI);
-  } catch {
-    throw new MagisterConnectionError("MAGISTER_AUTH_EXPIRED", "Magister rejected the authorization code. Start a fresh login and try again.");
+    tokens = await loginWithCredentials(credentials);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Magister rejected the credentials.";
+    throw new MagisterConnectionError("MAGISTER_AUTH_EXPIRED", message);
   }
 
   let state;

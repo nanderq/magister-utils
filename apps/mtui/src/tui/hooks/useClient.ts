@@ -1,41 +1,59 @@
-import { useState, useEffect } from 'react'
-import { MagisterClient } from '@magister/shared'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  loginWithCredentials,
+  MagisterClient,
+  loadStoredTokens,
+  writeTokensFile,
+  type MagisterCredentials,
+} from '@magister/shared'
 
 export interface ClientState {
   client: MagisterClient | null
   userName: string
   loading: boolean
+  authenticating: boolean
   error: string | null
+  login: (credentials: MagisterCredentials) => Promise<boolean>
+}
+
+async function resolveClient(
+  client: MagisterClient,
+): Promise<{ client: MagisterClient; userName: string }> {
+  const auth = await client.getAuthState()
+  const fullName = [auth.accountInfo.given_name, auth.accountInfo.family_name]
+    .filter(Boolean)
+    .join(' ')
+  return {
+    client,
+    userName: auth.name || fullName || (auth.accountInfo.preferred_username as string) || '',
+  }
 }
 
 export function useClient(tokensPath: string): ClientState {
-  const [state, setState] = useState<ClientState>({
-    client: null,
-    userName: '',
-    loading: true,
-    error: null,
-  })
+  const [client, setClient] = useState<MagisterClient | null>(null)
+  const [userName, setUserName] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [authenticating, setAuthenticating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       try {
-        const client = await MagisterClient.fromTokensFile(tokensPath)
-        const auth = await client.getAuthState()
-        const fullName = [auth.accountInfo.given_name, auth.accountInfo.family_name]
-          .filter(Boolean)
-          .join(' ')
-        const name = auth.name || fullName || (auth.accountInfo.preferred_username as string) || ''
-
+        const tokens = await loadStoredTokens(tokensPath)
+        if (!tokens) return
+        const resolved = await resolveClient(new MagisterClient({ tokens, tokensFilePath: tokensPath }))
         if (!cancelled) {
-          setState({ client, userName: name, loading: false, error: null })
+          setClient(resolved.client)
+          setUserName(resolved.userName)
         }
-      } catch (e) {
+      } catch (cause) {
         if (!cancelled) {
-          const msg = e instanceof Error ? e.message : String(e)
-          setState({ client: null, userName: '', loading: false, error: msg })
+          setError(cause instanceof Error ? cause.message : String(cause))
         }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
 
@@ -43,5 +61,23 @@ export function useClient(tokensPath: string): ClientState {
     return () => { cancelled = true }
   }, [tokensPath])
 
-  return state
+  const login = useCallback(async (credentials: MagisterCredentials): Promise<boolean> => {
+    setAuthenticating(true)
+    setError(null)
+    try {
+      const tokens = await loginWithCredentials(credentials)
+      await writeTokensFile(tokensPath, tokens)
+      const resolved = await resolveClient(new MagisterClient({ tokens, tokensFilePath: tokensPath }))
+      setClient(resolved.client)
+      setUserName(resolved.userName)
+      return true
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+      return false
+    } finally {
+      setAuthenticating(false)
+    }
+  }, [tokensPath])
+
+  return { client, userName, loading, authenticating, error, login }
 }

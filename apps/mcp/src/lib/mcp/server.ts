@@ -13,7 +13,8 @@ import { z } from "zod";
 import { createMagisterClient } from "@/lib/magister/repository";
 import { MagisterConnectionError } from "@/lib/magister/errors";
 
-import { paginationInput, scheduleInput, validateScheduleRange } from "./schemas";
+import { paginationInput, scheduleInput, timeZoneInput, validateScheduleRange } from "./schemas";
+import { localizeTimestamps, resolveUserTimeZone } from "./timezone";
 
 export interface ToolServer {
   registerTool: (...args: unknown[]) => unknown;
@@ -21,6 +22,13 @@ export interface ToolServer {
 
 interface ToolExtra {
   authInfo?: { extra?: Record<string, unknown> };
+  _meta?: Record<string, unknown>;
+  requestInfo?: { headers?: Record<string, string | string[] | undefined> };
+}
+
+interface RunToolOptions {
+  localizeDates?: boolean;
+  requestedTimeZone?: string;
 }
 
 function getUserId(extra: ToolExtra): string {
@@ -62,11 +70,22 @@ function toolError(error: unknown) {
   };
 }
 
-async function runTool(name: string, extra: ToolExtra, operation: () => Promise<Record<string, unknown>>) {
+async function runTool(
+  name: string,
+  extra: ToolExtra,
+  operation: () => Promise<Record<string, unknown>>,
+  options: RunToolOptions = {},
+) {
   const startedAt = Date.now();
   const userId = getUserId(extra);
   try {
-    const data = await operation();
+    const rawData = await operation();
+    const timeZone = options.localizeDates
+      ? resolveUserTimeZone(extra, options.requestedTimeZone)
+      : undefined;
+    const data = timeZone
+      ? { ...localizeTimestamps(rawData, timeZone), timeZone }
+      : rawData;
     console.info(JSON.stringify({ userId, tool: name, durationMs: Date.now() - startedAt, status: "success" }));
     return success(data);
   } catch (error) {
@@ -96,69 +115,69 @@ export function registerMagisterTools(server: ToolServer) {
     description: "Return lessons and appointments in a date range of at most 31 days.",
     inputSchema: scheduleInput,
     annotations: { readOnlyHint: true },
-  }, async ({ from, to }: { from: string; to: string }, extra: ToolExtra) => runTool("get_schedule", extra, async () => {
+  }, async ({ from, to, timeZone }: { from: string; to: string; timeZone?: string }, extra: ToolExtra) => runTool("get_schedule", extra, async () => {
     validateScheduleRange(from, to);
     const client = await createMagisterClient(getUserId(extra));
     const items = await client.getSchedule(await client.getPersonId(), from, to);
     return { from, to, count: items.length, items: items.map(presentScheduleItem) };
-  }));
+  }, { localizeDates: true, requestedTimeZone: timeZone }));
 
   server.registerTool("get_grades", {
     title: "Get grades",
     description: "Return the latest grade overview for the current school year.",
-    inputSchema: { calculatedOnly: z.boolean().optional() },
+    inputSchema: { calculatedOnly: z.boolean().optional(), timeZone: timeZoneInput },
     annotations: { readOnlyHint: true },
-  }, async ({ calculatedOnly }: { calculatedOnly?: boolean }, extra: ToolExtra) => runTool("get_grades", extra, async () => {
+  }, async ({ calculatedOnly, timeZone }: { calculatedOnly?: boolean; timeZone?: string }, extra: ToolExtra) => runTool("get_grades", extra, async () => {
     const client = await createMagisterClient(getUserId(extra));
     const result = await client.getLatestGradesOverview(await client.getPersonId(), { onlyCalculatedColumns: calculatedOnly });
     return { schoolYearId: result.schoolYearId, schoolYearEnd: result.schoolYearEnd, count: result.items.length, items: result.items.map(presentGrade) };
-  }));
+  }, { localizeDates: true, requestedTimeZone: timeZone }));
 
   server.registerTool("list_messages", {
     title: "List messages",
     description: "List inbox messages, newest first.",
     inputSchema: paginationInput,
     annotations: { readOnlyHint: true },
-  }, async ({ limit = 12, skip = 0 }: { limit?: number; skip?: number }, extra: ToolExtra) => runTool("list_messages", extra, async () => {
+  }, async ({ limit = 12, skip = 0, timeZone }: { limit?: number; skip?: number; timeZone?: string }, extra: ToolExtra) => runTool("list_messages", extra, async () => {
     const client = await createMagisterClient(getUserId(extra));
     const items = await client.getMessages({ top: limit, skip });
     return { skip, limit, count: items.length, items: items.map(presentMessage) };
-  }));
+  }, { localizeDates: true, requestedTimeZone: timeZone }));
 
   server.registerTool("get_message", {
     title: "Get message",
     description: "Return one inbox message and optionally its attachment metadata.",
-    inputSchema: { id: z.number().int().positive(), includeAttachments: z.boolean().optional() },
+    inputSchema: { id: z.number().int().positive(), includeAttachments: z.boolean().optional(), timeZone: timeZoneInput },
     annotations: { readOnlyHint: true },
-  }, async ({ id, includeAttachments = false }: { id: number; includeAttachments?: boolean }, extra: ToolExtra) => runTool("get_message", extra, async () => {
+  }, async ({ id, includeAttachments = false, timeZone }: { id: number; includeAttachments?: boolean; timeZone?: string }, extra: ToolExtra) => runTool("get_message", extra, async () => {
     const client = await createMagisterClient(getUserId(extra));
     if (includeAttachments) {
       const result = await client.getMessageWithAttachments(id);
       return presentMessageDetail(result.message, result.attachments);
     }
     return presentMessageDetail(await client.getMessage(id));
-  }));
+  }, { localizeDates: true, requestedTimeZone: timeZone }));
 
   server.registerTool("list_assignments", {
     title: "List assignments",
     description: "List assignments with deadlines and submission state.",
     inputSchema: paginationInput,
     annotations: { readOnlyHint: true },
-  }, async ({ limit = 50, skip = 0 }: { limit?: number; skip?: number }, extra: ToolExtra) => runTool("list_assignments", extra, async () => {
+  }, async ({ limit = 50, skip = 0, timeZone }: { limit?: number; skip?: number; timeZone?: string }, extra: ToolExtra) => runTool("list_assignments", extra, async () => {
     const client = await createMagisterClient(getUserId(extra));
     const items = await client.getAssignments(await client.getPersonId(), { top: limit, skip });
     return { skip, limit, count: items.length, items: items.map(presentAssignment) };
-  }));
+  }, { localizeDates: true, requestedTimeZone: timeZone }));
 
   server.registerTool("get_assignment", {
     title: "Get assignment",
     description: "Return one assignment with description and attachment metadata.",
-    inputSchema: { id: z.number().int().positive() },
+    inputSchema: { id: z.number().int().positive(), timeZone: timeZoneInput },
     annotations: { readOnlyHint: true },
-  }, async ({ id }: { id: number }, extra: ToolExtra) => runTool("get_assignment", extra, async () => {
+  }, async ({ id, timeZone }: { id: number; timeZone?: string }, extra: ToolExtra) => runTool("get_assignment", extra, async () => {
     const client = await createMagisterClient(getUserId(extra));
     return presentAssignmentDetail(await client.getAssignment(await client.getPersonId(), id));
-  }));
+  }, { localizeDates: true, requestedTimeZone: timeZone }));
 
   server.registerTool("list_study_guides", {
     title: "List study guides",

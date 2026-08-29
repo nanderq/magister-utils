@@ -33,7 +33,7 @@ function withHeaders(handler: (request: Request) => Promise<Response>) {
   return async (request: Request) => {
     const response = await handler(request);
     response.headers.set("Cache-Control", "no-store");
-    response.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, Mcp-Protocol-Version, Mcp-Session-Id");
+    response.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, Mcp-Protocol-Version, Mcp-Session-Id, X-Time-Zone");
     response.headers.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     response.headers.append("Vary", "Origin");
     const origin = request.headers.get("origin");

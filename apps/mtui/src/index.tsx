@@ -1,25 +1,19 @@
 #!/usr/bin/env bun
 import React from 'react'
-import { render } from 'ink'
+import { createCliRenderer } from '@opentui/core'
+import { createRoot } from '@opentui/react'
 import { getDefaultTokensFilePath } from '@magister/shared'
 import { App } from './tui/App.tsx'
 
 const tokensPath = getDefaultTokensFilePath()
-
-// Enter alternate screen buffer (like vim/less — leaves terminal clean on exit)
-process.stdout.write('\x1b[?1049h\x1b[H')
-
-function restoreScreen() {
-  process.stdout.write('\x1b[?1049l')
-}
-
-process.on('exit', restoreScreen)
-process.on('SIGINT', () => { restoreScreen(); process.exit(0) })
-process.on('SIGTERM', () => { restoreScreen(); process.exit(0) })
-
-const { waitUntilExit } = render(<App tokensPath={tokensPath} />, {
+const renderer = await createCliRenderer({
+  screenMode: 'alternate-screen',
   exitOnCtrlC: true,
+  consoleMode: 'disabled',
+  targetFps: 30,
 })
 
-await waitUntilExit()
-restoreScreen()
+renderer.setTerminalTitle('Magister')
+createRoot(renderer).render(<App tokensPath={tokensPath} />)
+
+await new Promise<void>(resolve => renderer.once('destroy', resolve))

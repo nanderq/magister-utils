@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, Text } from 'ink'
+import { Box, Text } from './primitives.tsx'
 
 export type View = 'schedule' | 'grades' | 'messages' | 'assignments'
 

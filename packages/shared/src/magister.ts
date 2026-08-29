@@ -33,6 +33,18 @@ export interface LoginURLOptions {
   nonce?: string;
 }
 
+export interface MagisterCredentials {
+  tenant: string;
+  username: string;
+  password: string;
+  authCode?: string;
+}
+
+export interface CredentialLoginOptions {
+  redirectUri?: string;
+  clientId?: string;
+}
+
 export interface AccountPrivilege {
   Naam: string;
   AccessType: string[];
@@ -443,6 +455,191 @@ async function sha256Base64Url(input: string): Promise<string> {
   return btoa(raw).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
+const MAGISTER_ACCOUNTS_URL = "https://accounts.magister.net";
+const AUTH_DEBUG_PREFIX = "[magister-auth]";
+const SENSITIVE_AUTH_KEY = /(?:token|password|secret|cookie|code|session|state|nonce|returnurl|username|challenge|credential)|^(?:id|name)$/i;
+
+function isAuthDebugEnabled(): boolean {
+  return typeof process !== "undefined" && process.env.MAGISTER_AUTH_DEBUG === "1";
+}
+
+function redactAuthUrl(value: string): string {
+  try {
+    const url = new URL(value, MAGISTER_ACCOUNTS_URL);
+    for (const key of Array.from(url.searchParams.keys())) {
+      url.searchParams.set(key, "<REDACTED>");
+    }
+    if (url.hash) {
+      const fragment = new URLSearchParams(url.hash.replace(/^#/, ""));
+      for (const key of Array.from(fragment.keys())) fragment.set(key, "<REDACTED>");
+      url.hash = fragment.toString();
+    }
+    return url.toString();
+  } catch {
+    return "<UNPARSEABLE URL OMITTED>";
+  }
+}
+
+function redactAuthPayload(value: unknown, key = ""): unknown {
+  if (SENSITIVE_AUTH_KEY.test(key)) return "<REDACTED>";
+  if (Array.isArray(value)) return value.map((item) => redactAuthPayload(item));
+  if (isObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, childValue]) => [
+        childKey,
+        redactAuthPayload(childValue, childKey),
+      ]),
+    );
+  }
+  if (typeof value === "string" && /^(?:https?:|m6loapp:)/i.test(value)) {
+    return redactAuthUrl(value);
+  }
+  return value;
+}
+
+async function debugAuthResponse(step: string, response: Response): Promise<void> {
+  if (!isAuthDebugEnabled()) return;
+
+  const location = response.headers.get("location");
+  const contentType = response.headers.get("content-type");
+  const details: Record<string, unknown> = {
+    step,
+    status: response.status,
+    statusText: response.statusText,
+    headerNames: Array.from(response.headers.keys()),
+    ...(response.url ? { url: redactAuthUrl(response.url) } : {}),
+    ...(location ? {
+      location: redactAuthUrl(location),
+      locationParameters: (() => {
+        try {
+          const url = new URL(location, MAGISTER_ACCOUNTS_URL);
+          return [
+            ...Array.from(url.searchParams.keys()),
+            ...Array.from(new URLSearchParams(url.hash.replace(/^#/, "")).keys()),
+          ];
+        } catch {
+          return [];
+        }
+      })(),
+    } : {}),
+    setCookieNames: getSetCookieHeaders(response.headers)
+      .map((cookie) => cookie.split("=", 1)[0]?.trim())
+      .filter(Boolean),
+    ...(contentType ? { contentType } : {}),
+  };
+
+  if (contentType?.includes("json")) {
+    try {
+      details.body = redactAuthPayload(await response.clone().json());
+    } catch {
+      details.body = "<INVALID JSON OMITTED>";
+    }
+  }
+
+  console.error(`${AUTH_DEBUG_PREFIX} ${JSON.stringify(details)}`);
+}
+
+function normalizeTenantHost(tenant: string): string {
+  const value = tenant.trim();
+  if (!value) throw new Error("School URL is required");
+
+  let url: URL;
+  try {
+    url = new URL(value.includes("://") ? value : `https://${value}`);
+  } catch {
+    throw new Error("Enter a valid Magister school URL");
+  }
+
+  if (url.protocol !== "https:" || !url.hostname) {
+    throw new Error("Enter a valid HTTPS Magister school URL");
+  }
+
+  return url.host;
+}
+
+function resolveRedirect(location: string | null, base: string): string {
+  if (!location) throw new Error("Magister did not return the expected redirect");
+  return new URL(location, base).toString();
+}
+
+function splitSetCookieHeader(value: string): string[] {
+  return value.split(/,(?=\s*[^;,=\s]+=[^;,]*)/g);
+}
+
+function getSetCookieHeaders(headers: Headers): string[] {
+  const compatible = headers as Headers & {
+    getSetCookie?: () => string[];
+    raw?: () => Record<string, string[]>;
+  };
+  const direct = compatible.getSetCookie?.();
+  if (direct?.length) return direct;
+  const raw = compatible.raw?.()["set-cookie"];
+  if (raw?.length) return raw;
+  const combined = headers.get("set-cookie");
+  return combined ? splitSetCookieHeader(combined) : [];
+}
+
+class CookieJar {
+  private readonly cookies = new Map<string, string>();
+
+  addFrom(headers: Headers): void {
+    for (const cookie of getSetCookieHeaders(headers)) {
+      const pair = cookie.split(";", 1)[0]?.trim();
+      const separator = pair?.indexOf("=") ?? -1;
+      if (!pair || separator <= 0) continue;
+      this.cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
+    }
+  }
+
+  get(name: string): string | undefined {
+    return this.cookies.get(name);
+  }
+
+  toHeader(): string {
+    return Array.from(this.cookies, ([name, value]) => `${name}=${value}`).join("; ");
+  }
+}
+
+async function validateChallengeResponse(response: Response): Promise<void> {
+  if (response.status === 200) return;
+
+  let message = `Magister authentication failed (${response.status})`;
+  try {
+    const payload = (await response.json()) as {
+      error?: string;
+      error_description?: string;
+    };
+    message = payload.error_description ?? payload.error ?? message;
+  } catch {
+    // Magister occasionally returns an empty or non-JSON error response.
+  }
+  throw new Error(message);
+}
+
+interface ChallengeResult {
+  action?: string;
+  redirectURL?: string;
+  error?: string;
+}
+
+async function readChallengeResult(response: Response): Promise<ChallengeResult> {
+  if (!response.headers.get("content-type")?.includes("json")) return {};
+  try {
+    const result = (await response.json()) as ChallengeResult;
+    if (result.error) throw new Error(result.error);
+    return result;
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error("Magister returned an invalid challenge response");
+  }
+}
+
+function oauthParameter(url: string, name: string): string | null {
+  const parsed = new URL(url);
+  const fragment = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+  return fragment.get(name) ?? parsed.searchParams.get(name);
+}
+
 export function generateRandomString(length = 50): string {
   const chars =
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -481,12 +678,146 @@ export async function generateLoginURL(
     "&code_challenge_method=S256";
 
   if (tenant) {
-    const host = new URL(tenant).host;
+    const host = normalizeTenantHost(tenant);
     url += `&acr_values=tenant:${host}&prompt=select_account`;
     if (username) url += `&login_hint=${encodeURIComponent(username)}`;
   }
 
   return url;
+}
+
+export async function loginWithCredentials(
+  credentials: MagisterCredentials,
+  {
+    redirectUri = NATIVE_REDIRECT_URI,
+    clientId = MAGISTER_CLIENT_ID,
+  }: CredentialLoginOptions = {},
+): Promise<Tokens> {
+  const tenant = normalizeTenantHost(credentials.tenant);
+  const username = credentials.username.trim();
+  if (!username) throw new Error("Username is required");
+  if (!credentials.password) throw new Error("Password is required");
+
+  const codeVerifier = generateRandomString(64);
+  const state = generateRandomString(64);
+  const nonce = generateRandomHex(32);
+  const loginUrl = await generateLoginURL(codeVerifier, {
+    tenant,
+    username,
+    redirectUri,
+    clientId,
+    state,
+    nonce,
+  });
+  const manualRedirect: RequestInit = { redirect: "manual" };
+  const cookies = new CookieJar();
+
+  const authorizeResponse = await fetch(loginUrl, manualRedirect);
+  await debugAuthResponse("authorize", authorizeResponse);
+  cookies.addFrom(authorizeResponse.headers);
+  const authorizeRedirect = resolveRedirect(
+    authorizeResponse.headers.get("location"),
+    MAGISTER_ACCOUNTS_URL,
+  );
+
+  const loginResponse = await fetch(authorizeRedirect, manualRedirect);
+  await debugAuthResponse("login-bootstrap", loginResponse);
+  cookies.addFrom(loginResponse.headers);
+  const challengeRedirect = resolveRedirect(
+    loginResponse.headers.get("location"),
+    MAGISTER_ACCOUNTS_URL,
+  );
+  const challengeUrl = new URL(challengeRedirect);
+  const sessionId = challengeUrl.searchParams.get("sessionId");
+  const returnUrl = challengeUrl.searchParams.get("returnUrl");
+  if (!sessionId || !returnUrl) {
+    throw new Error("Magister did not start a username/password challenge");
+  }
+
+  const xsrfCookie = cookies.get("XSRF-TOKEN");
+  if (!xsrfCookie) throw new Error("Magister did not return an XSRF token");
+  let xsrfToken = xsrfCookie;
+  try {
+    xsrfToken = decodeURIComponent(xsrfCookie);
+  } catch {
+    // Keep the raw cookie value if it is not URI encoded.
+  }
+
+  const challengeHeaders = () => ({
+    "Content-Type": "application/json",
+    Cookie: cookies.toHeader(),
+    "X-XSRF-TOKEN": xsrfToken,
+  });
+  const challengeBody = (value: Record<string, unknown>) =>
+    JSON.stringify({
+      authCode: credentials.authCode,
+      sessionId,
+      returnUrl,
+      ...value,
+    });
+
+  const usernameResponse = await fetch(`${MAGISTER_ACCOUNTS_URL}/challenges/username`, {
+    method: "POST",
+    body: challengeBody({ username }),
+    headers: challengeHeaders(),
+  });
+  await debugAuthResponse("username-challenge", usernameResponse);
+  cookies.addFrom(usernameResponse.headers);
+  await validateChallengeResponse(usernameResponse);
+
+  const passwordResponse = await fetch(`${MAGISTER_ACCOUNTS_URL}/challenges/password`, {
+    method: "POST",
+    body: challengeBody({ password: credentials.password }),
+    headers: challengeHeaders(),
+  });
+  await debugAuthResponse("password-challenge", passwordResponse);
+  cookies.addFrom(passwordResponse.headers);
+  await validateChallengeResponse(passwordResponse);
+  const passwordChallenge = await readChallengeResult(passwordResponse);
+
+  let authorizationTarget = passwordChallenge.redirectURL ?? returnUrl;
+  if (passwordChallenge.action === "pairfidopromo") {
+    const skipResponse = await fetch(
+      `${MAGISTER_ACCOUNTS_URL}/challenges/skip-pair-fido-promo`,
+      {
+        method: "POST",
+        body: challengeBody({
+          reason: "browser-not-supported",
+          userVerifyingPlatformAuthenticator: null,
+        }),
+        headers: challengeHeaders(),
+      },
+    );
+    await debugAuthResponse("skip-passkey-promotion", skipResponse);
+    cookies.addFrom(skipResponse.headers);
+    await validateChallengeResponse(skipResponse);
+    const skipChallenge = await readChallengeResult(skipResponse);
+    if (!skipChallenge.redirectURL) {
+      throw new Error("Magister did not finish the passkey promotion");
+    }
+    authorizationTarget = skipChallenge.redirectURL;
+  }
+
+  const callbackResponse = await fetch(resolveRedirect(authorizationTarget, MAGISTER_ACCOUNTS_URL), {
+    redirect: "manual",
+    headers: { Cookie: cookies.toHeader() },
+  });
+  await debugAuthResponse("authorization-callback", callbackResponse);
+  const oauthRedirect = resolveRedirect(
+    callbackResponse.headers.get("location"),
+    MAGISTER_ACCOUNTS_URL,
+  );
+  const returnedState = oauthParameter(oauthRedirect, "state");
+  if (returnedState && returnedState !== state) {
+    throw new Error("Magister returned an invalid authentication state");
+  }
+
+  const { code, error, errorDescription } = parseAuthResponse(oauthRedirect);
+  if (error || !code) {
+    throw new Error(errorDescription ?? error ?? "Magister did not return an authorization code");
+  }
+
+  return exchangeCodeForTokens(code, codeVerifier, redirectUri, clientId);
 }
 
 export function parseAuthResponse(url: string): {
@@ -523,6 +854,7 @@ export async function exchangeCodeForTokens(
       code_verifier: codeVerifier,
     }).toString(),
   });
+  await debugAuthResponse("token-exchange", res);
 
   const payload = (await res.json()) as Partial<Tokens> & {
     error?: string;
@@ -561,6 +893,7 @@ export async function refreshTokens(
       grant_type: "refresh_token",
     }).toString(),
   });
+  await debugAuthResponse("token-refresh", res);
 
   const payload = (await res.json()) as Partial<Tokens> & {
     error?: string;
@@ -593,10 +926,16 @@ export function getGlobalTokensFilePath(): string {
 export function getDefaultTokensFilePath(): string {
   if (process.env.MAGISTER_TOKENS_FILE) return process.env.MAGISTER_TOKENS_FILE;
 
+  // `mcli setup` owns the global file, so prefer it regardless of the caller's
+  // working directory. A repository-local file is only a legacy fallback;
+  // otherwise an old checkout token can silently shadow freshly setup tokens.
+  const globalPath = getGlobalTokensFilePath();
+  if (existsSync(globalPath)) return globalPath;
+
   const localPath = join(process.cwd(), "tokens.json");
   if (existsSync(localPath)) return localPath;
 
-  return getGlobalTokensFilePath();
+  return globalPath;
 }
 
 export async function ensureParentDir(path: string): Promise<void> {
