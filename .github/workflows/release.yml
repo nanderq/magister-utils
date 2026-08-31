@@ -22,7 +22,7 @@ jobs:
             platform: windows
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.10
@@ -33,7 +33,7 @@ jobs:
       - if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path dist/* -DestinationPath magister-windows.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: magister-${{ matrix.platform }}
           path: magister-${{ matrix.platform }}.*
@@ -46,8 +46,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
