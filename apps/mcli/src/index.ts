@@ -78,7 +78,7 @@ async function loadClient(command: string): Promise<MagisterClient> {
 async function handleCapabilities(): Promise<void> {
   const tokensFile = getDefaultTokensFilePath();
   ok("capabilities", {
-    version: "1.0.0",
+    version: "0.1.0-alpha.1",
     entry_point: "mcli",
     tokens_file: tokensFile,
     date_format: "Accepts: 'today', 'tomorrow', or 'YYYY-MM-DD'",

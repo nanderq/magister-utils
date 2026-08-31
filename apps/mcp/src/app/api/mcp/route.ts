@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const mcpHandler = createMcpHandler(
   (server) => registerMagisterTools(server as unknown as import("@/lib/mcp/server").ToolServer),
-  { serverInfo: { name: "magister-mcp", version: "1.0.0" } },
+  { serverInfo: { name: "magister-mcp", version: "0.1.0-alpha.1" } },
   { basePath: "/api", maxDuration: 60, disableSse: true, verboseLogs: false },
 );
 

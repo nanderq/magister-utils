@@ -50,6 +50,13 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - run: gh release create "$GITHUB_REF_NAME" artifacts/* --generate-notes --verify-tag
+      - name: Create GitHub release
+        shell: bash
+        run: |
+          release_args=("$GITHUB_REF_NAME" artifacts/* --generate-notes --verify-tag)
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release create "${release_args[@]}"
         env:
           GH_TOKEN: ${{ github.token }}
