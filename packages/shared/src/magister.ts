@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 declare const Bun: {
   file(path: string): { text(): Promise<string> };
-  write(path: string, data: string): Promise<number>;
   spawn(command: string[]): { exited: Promise<number> };
 };
 
@@ -962,7 +962,13 @@ export async function writeTokensFile(
 ): Promise<void> {
   const base = existingData ?? (await readOptionalTokensFileShape(path));
   await ensureParentDir(path);
-  await Bun.write(path, `${JSON.stringify({ ...base, ...tokens }, null, 2)}\n`);
+  const file = await open(path, "w", 0o600);
+  try {
+    await file.chmod(0o600);
+    await file.writeFile(`${JSON.stringify({ ...base, ...tokens }, null, 2)}\n`, "utf8");
+  } finally {
+    await file.close();
+  }
 }
 
 async function readOptionalTokensFileShape(

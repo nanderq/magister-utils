@@ -8,12 +8,13 @@
   },
   "scripts": {
     "build": "bun build --compile --outfile ../../dist/mtui src/index.tsx --target bun",
-    "dev": "bun run src/index.tsx"
+    "dev": "bun run src/index.tsx",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@magister/shared": "workspace:*",
-    "@opentui/core": "^0.4.5",
-    "@opentui/react": "^0.4.5",
+    "@opentui/core": "^0.5.9",
+    "@opentui/react": "^0.5.9",
     "react": "^19.2.5"
   }
 }

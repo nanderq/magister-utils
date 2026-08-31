@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,6 +10,7 @@ import {
   loginWithCredentials,
   MagisterClient,
   type Tokens,
+  writeTokensFile,
 } from "./magister";
 
 describe("credential authentication", () => {
@@ -202,6 +203,20 @@ describe("MagisterClient token persistence", () => {
     });
     await client.setTokens(next);
     expect(persisted).toEqual(next);
+  });
+
+  test("writes token files with owner-only permissions", async () => {
+    const root = mkdtempSync(join(tmpdir(), "magister-token-permissions-"));
+    const path = join(root, "tokens.json");
+    const tokens: Tokens = { access_token: "a", refresh_token: "r", id_token: "i" };
+
+    try {
+      writeFileSync(path, "{}", { mode: 0o644 });
+      await writeTokensFile(path, tokens);
+      expect(statSync(path).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

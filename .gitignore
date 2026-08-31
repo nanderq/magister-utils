@@ -13,8 +13,8 @@ wheels/
 node_modules/
 .next/
 *.tsbuildinfo
-.env
-.env.local
+.env*
+!.env.example
 .vercel/
 
 # Local runtime/auth state
@@ -23,4 +23,4 @@ tokens.json
 # Legacy root build outputs
 dist
 
-.DS_STORE
+.DS_Store
