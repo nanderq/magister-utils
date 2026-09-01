@@ -29,6 +29,7 @@
     "setup": "bun run apps/mcli/src/index.ts setup",
     "test": "bun test packages/shared apps/mcp/src/lib",
     "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd apps/mcli typecheck && bun run --cwd apps/mtui typecheck && bun run --cwd apps/mcp typecheck",
+    "version:release": "bun scripts/update-release-package-versions.ts",
     "tui": "bun run apps/mtui/src/index.tsx"
   },
   "devDependencies": {

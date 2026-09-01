@@ -5,12 +5,79 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override; leave blank to increment the latest prerelease"
+        required: false
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-clients
+  cancel-in-progress: false
+
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      ref: ${{ steps.release.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: release
+        name: Resolve release metadata
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "Manual releases must run from the main branch." >&2
+              exit 1
+            fi
+            raw="$DISPATCH_VERSION"
+            if [[ -z "$raw" ]]; then
+              latest_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)
+              if [[ -z "$latest_tag" ]]; then
+                raw="0.1.0-alpha.1"
+              elif [[ "${latest_tag#v}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-(.+)\.([0-9]+)$ ]]; then
+                raw="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+              elif [[ "${latest_tag#v}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                raw="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))-alpha.1"
+              else
+                echo "Cannot suggest a version from latest tag: $latest_tag" >&2
+                exit 1
+              fi
+              echo "Suggested release version: $raw"
+            fi
+          else
+            raw="$GITHUB_REF_NAME"
+          fi
+
+          version="${raw#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $raw" >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "### Preparing release v$version" >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    needs: preflight
     strategy:
       matrix:
         include:
@@ -23,10 +90,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Align package versions
+        run: bun run version:release "${{ needs.preflight.outputs.version }}"
+      - run: bun install --lockfile-only --ignore-scripts
       - run: bun run build:release
       - if: runner.os != 'Windows'
         run: tar -C dist -czf magister-${{ matrix.platform }}.tar.gz .
@@ -40,24 +112,67 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [preflight, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
       - name: Create GitHub release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          RELEASE_REF: ${{ needs.preflight.outputs.ref }}
+          IS_PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
         run: |
-          release_args=("$GITHUB_REF_NAME" artifacts/* --generate-notes --verify-tag)
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+          release_args=("$RELEASE_TAG" artifacts/* --generate-notes)
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            release_args+=(--verify-tag)
+          else
+            release_args+=(--target "$RELEASE_REF")
+          fi
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
             release_args+=(--prerelease)
           fi
           gh release create "${release_args[@]}"
+
+  finalize:
+    needs: [preflight, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          token: ${{ github.token }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Update version strings
+        run: bun run version:release "${{ needs.preflight.outputs.version }}"
+      - name: Refresh lockfile
+        run: bun install --lockfile-only --ignore-scripts
+      - name: Commit and push version bump
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          if git diff --quiet -- package.json apps/mcli/package.json apps/mcp/package.json apps/mtui/package.json packages/shared/package.json bun.lock; then
+            echo "Package versions already match $RELEASE_TAG."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json apps/mcli/package.json apps/mcp/package.json apps/mtui/package.json packages/shared/package.json bun.lock
+          git commit -m "chore(release): prepare $RELEASE_TAG"
+          git push origin HEAD:main
