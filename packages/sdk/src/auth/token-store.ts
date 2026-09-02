@@ -25,7 +25,16 @@ export class TokenStore {
             throw new Error(`No token file at ${this.path}`);
         }
 
-        const tokens = (await file.json()) as Partial<Tokens>;
+        const tokens = await file.json() as Partial<Tokens>;
+        if (
+            typeof tokens.accessToken !== "string"
+            || typeof tokens.refreshToken !== "string"
+            || typeof tokens.idToken !== "string"
+            || typeof tokens.expiresAt !== "number"
+            || !Number.isFinite(tokens.expiresAt)
+        ) {
+            throw new Error(`Invalid token file at ${this.path}`);
+        }
         return tokens as Tokens;
     }
 

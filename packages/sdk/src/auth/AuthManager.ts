@@ -1,7 +1,12 @@
 import { generateRandomString, generateRandomHex, sha256Base64Url } from "../utils/generator";
-import { MAGISTER_ACCOUNTS_URL, MAGISTER_CLIENT_ID, MAGISTER_REDIRECT_URI } from "../constants";
+import {
+    MAGISTER_ACCOUNTS_URL,
+    MAGISTER_API_DISCOVERY_URL,
+    MAGISTER_CLIENT_ID,
+    MAGISTER_REDIRECT_URI,
+} from "../constants";
 import { TokenStore } from "./token-store";
-import type { Tokens } from "../types";
+import type { Session, Tokens } from "../types";
 
 export interface AuthManagerOptions {
     tenant: string;
@@ -23,6 +28,11 @@ export class AuthManager {
     private readonly password: string;
     private readonly authCode?: string;
     private readonly tokenStore: TokenStore;
+    private tokens: Tokens | null = null;
+    private cachedBaseUrl: string | null = null;
+    private sessionPromise: Promise<Session> | null = null;
+    private loginPromise: Promise<Session> | null = null;
+    private refreshPromise: Promise<Session> | null = null;
 
     constructor(options: AuthManagerOptions) {
         this.tenant = normalizeTenantHost(options.tenant);
@@ -35,23 +45,150 @@ export class AuthManager {
         if (!this.password) throw new Error("Password is required");
     }
 
-    async login(): Promise<Tokens> {
+    async login(): Promise<Session> {
+        if (this.loginPromise) return this.loginPromise;
+
+        this.loginPromise = this.performLogin().finally(() => {
+            this.loginPromise = null;
+        });
+        return this.loginPromise;
+    }
+
+    private async performLogin(): Promise<Session> {
+        this.clearSession();
         const { code, codeVerifier } = await this.getAuthorizationCode();
         const tokens = await this.fetchTokens(code, codeVerifier);
         await this.tokenStore.store(tokens);
-        return tokens;
+        this.tokens = tokens;
+        return this.session();
+    }
+
+    async session(): Promise<Session> {
+        if (this.hasUsableSession()) return this.currentSession();
+
+        if (!this.sessionPromise) {
+            this.sessionPromise = this.loadSession()
+                .catch((error) => {
+                    this.cachedBaseUrl = null;
+                    throw error;
+                })
+                .finally(() => {
+                    this.sessionPromise = null;
+                });
+        }
+
+        return this.sessionPromise;
+    }
+
+    async hasSession(): Promise<boolean> {
+        if (this.isUsable(this.tokens)) return true;
+
+        try {
+            const tokens = await this.tokenStore.read();
+            return this.isUsable(tokens) || tokens.refreshToken.length > 0;
+        } catch {
+            return false;
+        }
+    }
+
+    async logout(): Promise<void> {
+        await this.deleteTokens();
+    }
+
+    async refresh(): Promise<Session> {
+        if (this.refreshPromise) return this.refreshPromise;
+
+        this.refreshPromise = this.performRefresh().finally(() => {
+            this.refreshPromise = null;
+        });
+        return this.refreshPromise;
+    }
+
+    private async performRefresh(): Promise<Session> {
+        const tokens = this.tokens ?? await this.tokenStore.read();
+        const refreshed = await this.refreshTokens(tokens);
+        await this.tokenStore.store(refreshed);
+        this.tokens = refreshed;
+        this.cachedBaseUrl = null;
+        const baseUrl = await this.ensureBaseUrl(refreshed.accessToken);
+        return { ...refreshed, baseUrl };
     }
 
     async readTokens(): Promise<Tokens> {
-        return this.tokenStore.read();
+        return this.ensureTokens();
     }
 
     async storeTokens(tokens: Tokens): Promise<void> {
+        this.tokens = tokens;
+        this.cachedBaseUrl = null;
+        this.sessionPromise = null;
         return this.tokenStore.store(tokens);
     }
 
     async deleteTokens(): Promise<void> {
+        this.clearSession();
         return this.tokenStore.delete();
+    }
+
+    async baseUrl(): Promise<string> {
+        return (await this.session()).baseUrl;
+    }
+
+    private isUsable(tokens: Tokens | null): boolean {
+        return tokens !== null && tokens.expiresAt > Date.now();
+    }
+
+    private hasUsableSession(): boolean {
+        return this.isUsable(this.tokens) && this.cachedBaseUrl !== null;
+    }
+
+    private currentSession(): Session {
+        if (!this.tokens || !this.cachedBaseUrl) {
+            throw new Error("No Magister session");
+        }
+
+        return { ...this.tokens, baseUrl: this.cachedBaseUrl };
+    }
+
+    private async loadSession(): Promise<Session> {
+        const tokens = await this.ensureTokens();
+        const baseUrl = await this.ensureBaseUrl(tokens.accessToken);
+        return { ...tokens, baseUrl };
+    }
+
+    private async ensureTokens(): Promise<Tokens> {
+        if (this.tokens && this.isUsable(this.tokens)) {
+            return this.tokens;
+        }
+
+        const tokens = await this.tokenStore.read();
+        if (this.isUsable(tokens)) {
+            this.tokens = tokens;
+            return tokens;
+        }
+
+        if (tokens.refreshToken) {
+            const refreshed = await this.refreshTokens(tokens);
+            await this.tokenStore.store(refreshed);
+            this.tokens = refreshed;
+            this.cachedBaseUrl = null;
+            return refreshed;
+        }
+
+        this.tokens = null;
+        throw new Error("Magister session expired. Call login() again.");
+    }
+
+    private async ensureBaseUrl(accessToken: string): Promise<string> {
+        if (this.cachedBaseUrl) return this.cachedBaseUrl;
+        this.cachedBaseUrl = await resolveBaseUrl(accessToken);
+        return this.cachedBaseUrl;
+    }
+
+    private clearSession(): void {
+        this.tokens = null;
+        this.cachedBaseUrl = null;
+        this.sessionPromise = null;
     }
 
     private async getAuthorizationCode(): Promise<{ code: string; codeVerifier: string }> {
@@ -169,6 +306,54 @@ export class AuthManager {
             expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
         };
     }
+
+    private async refreshTokens(tokens: Tokens): Promise<Tokens> {
+        const response = await fetch(`${MAGISTER_ACCOUNTS_URL}/connect/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                client_id: MAGISTER_CLIENT_ID,
+                grant_type: "refresh_token",
+                refresh_token: tokens.refreshToken,
+            }).toString(),
+        });
+        const payload = await response.json() as {
+            access_token?: string;
+            refresh_token?: string;
+            id_token?: string;
+            expires_in?: number;
+            error?: string;
+            error_description?: string;
+        };
+        if (!response.ok || !payload.access_token) {
+            throw new Error(
+                payload.error_description ?? payload.error ?? `Token refresh failed (${response.status})`,
+            );
+        }
+        return {
+            accessToken: payload.access_token,
+            refreshToken: payload.refresh_token ?? tokens.refreshToken,
+            idToken: payload.id_token ?? tokens.idToken,
+            expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+        };
+    }
+}
+
+async function resolveBaseUrl(accessToken: string): Promise<string> {
+    const response = await fetch(MAGISTER_API_DISCOVERY_URL, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const body = await response.text();
+
+    if (!response.ok) {
+        throw new Error(`Base URL request failed (${response.status})`);
+    }
+
+    const data = JSON.parse(body) as { links?: { href?: string }[] };
+    const href = data.links?.[0]?.href;
+    if (!href) throw new Error("Could not resolve Magister base URL");
+
+    return `${new URL(href).origin}/api`;
 }
 
 function buildAuthorizationUrl(codeChallenge: string, tenant: string, username: string): string {

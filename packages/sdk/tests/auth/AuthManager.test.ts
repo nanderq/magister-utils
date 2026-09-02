@@ -54,6 +54,12 @@ function mockLoginFetch() {
             });
         }
 
+        if (url === "https://magister.net/.well-known/host-meta.json?rel=magister-api") {
+            return Response.json({
+                links: [{ href: "https://school.magister.net/api/leerlingen/12345" }],
+            });
+        }
+
         throw new Error(`Unexpected request: ${url}`);
     }) as typeof fetch;
 }
@@ -84,14 +90,20 @@ describe("AuthManager", () => {
             tokenStore,
         });
 
-        const tokens = await auth.login();
-        expect(tokens).toMatchObject({
+        const session = await auth.login();
+        expect(session).toMatchObject({
+            accessToken: "access",
+            refreshToken: "refresh",
+            idToken: "id",
+            baseUrl: "https://school.magister.net/api",
+        });
+        expect(session.expiresAt).toBeGreaterThan(Date.now());
+        await expect(auth.readTokens()).resolves.toMatchObject({
             accessToken: "access",
             refreshToken: "refresh",
             idToken: "id",
         });
-        expect(tokens.expiresAt).toBeGreaterThan(Date.now());
-        await expect(auth.readTokens()).resolves.toEqual(tokens);
+        await expect(auth.session()).resolves.toEqual(session);
 
         const usernameRequest = requests.find(({ url }) => url.endsWith("/challenges/username"));
         const headers = new Headers(usernameRequest?.init?.headers);
@@ -105,5 +117,153 @@ describe("AuthManager", () => {
         const tokenRequest = requests.find(({ url }) => url.endsWith("/connect/token"));
         expect(String(tokenRequest?.init?.body)).toContain("code=authorization-code");
         expect(String(tokenRequest?.init?.body)).toContain("code_verifier=");
+        expect(requests.filter(({ url }) => url.includes("host-meta.json"))).toHaveLength(1);
+    });
+
+    test("session() reuses stored tokens without logging in again", async () => {
+        const requests: string[] = [];
+        globalThis.fetch = (async (input: string | URL | Request) => {
+            const url = input instanceof Request ? input.url : input.toString();
+            requests.push(url);
+
+            if (url === "https://magister.net/.well-known/host-meta.json?rel=magister-api") {
+                return Response.json({
+                    links: [{ href: "https://school.magister.net/api/leerlingen/12345" }],
+                });
+            }
+
+            throw new Error(`Unexpected request: ${url}`);
+        }) as typeof fetch;
+
+        const tokenStore = new TokenStore({
+            path: join(mkdtempSync(join(tmpdir(), "magister-sdk-")), "tokens.json"),
+        });
+        await tokenStore.store({
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            idToken: "id-token",
+            expiresAt: Date.now() + 3_600_000,
+        });
+
+        const auth = new AuthManager({
+            tenant: "school.magister.net",
+            username: "student@example.com",
+            password: "secret",
+            tokenStore,
+        });
+
+        const session = await auth.session();
+        expect(session).toMatchObject({
+            accessToken: "access-token",
+            baseUrl: "https://school.magister.net/api",
+        });
+        await expect(auth.session()).resolves.toEqual(session);
+        expect(requests).toEqual([
+            "https://magister.net/.well-known/host-meta.json?rel=magister-api",
+        ]);
+    });
+
+    test("session() refreshes expired tokens", async () => {
+        globalThis.fetch = (async (input: string | URL | Request) => {
+            const url = input instanceof Request ? input.url : input.toString();
+            if (url === "https://accounts.magister.net/connect/token") {
+                return Response.json({ access_token: "refreshed-access", expires_in: 3600 });
+            }
+            if (url === "https://magister.net/.well-known/host-meta.json?rel=magister-api") {
+                return Response.json({
+                    links: [{ href: "https://school.magister.net/api/leerlingen/12345" }],
+                });
+            }
+            throw new Error(`Unexpected request: ${url}`);
+        }) as typeof fetch;
+        const tokenStore = new TokenStore({
+            path: join(mkdtempSync(join(tmpdir(), "magister-sdk-")), "tokens.json"),
+        });
+        await tokenStore.store({
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            idToken: "id-token",
+            expiresAt: Date.now() - 1,
+        });
+
+        const auth = new AuthManager({
+            tenant: "school.magister.net",
+            username: "student@example.com",
+            password: "secret",
+            tokenStore,
+        });
+
+        await expect(auth.session()).resolves.toMatchObject({
+            accessToken: "refreshed-access",
+            refreshToken: "refresh-token",
+            idToken: "id-token",
+        });
+        await expect(tokenStore.read()).resolves.toMatchObject({ accessToken: "refreshed-access" });
+    });
+
+    test("hasSession() recognizes refreshable expired tokens", async () => {
+        const tokenStore = new TokenStore({
+            path: join(mkdtempSync(join(tmpdir(), "magister-sdk-")), "tokens.json"),
+        });
+        const auth = new AuthManager({
+            tenant: "school.magister.net",
+            username: "student@example.com",
+            password: "secret",
+            tokenStore,
+        });
+
+        await expect(auth.hasSession()).resolves.toBe(false);
+
+        await tokenStore.store({
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            idToken: "id-token",
+            expiresAt: Date.now() - 1,
+        });
+
+        await expect(auth.hasSession()).resolves.toBe(true);
+    });
+
+    test("deduplicates concurrent login calls", async () => {
+        const requests: string[] = [];
+        const fetchMock = mockLoginFetch();
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            requests.push(input instanceof Request ? input.url : input.toString());
+            return fetchMock(input, init);
+        }) as typeof fetch;
+        const auth = new AuthManager({
+            tenant: "school.magister.net",
+            username: "student@example.com",
+            password: "secret",
+            tokenStore: new TokenStore({
+                path: join(mkdtempSync(join(tmpdir(), "magister-sdk-")), "tokens.json"),
+            }),
+        });
+
+        const [first, second] = await Promise.all([auth.login(), auth.login()]);
+
+        expect(first).toEqual(second);
+        expect(requests.filter((url) => url.includes("/connect/token"))).toHaveLength(1);
+    });
+
+    test("logout() clears the stored session", async () => {
+        globalThis.fetch = mockLoginFetch();
+
+        const tokenStore = new TokenStore({
+            path: join(mkdtempSync(join(tmpdir(), "magister-sdk-")), "tokens.json"),
+        });
+        const auth = new AuthManager({
+            tenant: "school.magister.net",
+            username: "student@example.com",
+            password: "secret",
+            tokenStore,
+        });
+
+        await auth.login();
+        await expect(auth.hasSession()).resolves.toBe(true);
+
+        await auth.logout();
+        await expect(auth.hasSession()).resolves.toBe(false);
+        await expect(auth.session()).rejects.toThrow(`No token file at ${tokenStore.path}`);
     });
 });

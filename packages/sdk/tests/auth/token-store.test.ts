@@ -34,4 +34,11 @@ describe("TokenStore", () => {
         const store = tempStore();
         await expect(store.delete()).resolves.toBeUndefined();
     });
+
+    test("rejects malformed token data", async () => {
+        const store = tempStore();
+        await Bun.write(store.path, JSON.stringify({ accessToken: "access" }));
+
+        await expect(store.read()).rejects.toThrow(`Invalid token file at ${store.path}`);
+    });
 });

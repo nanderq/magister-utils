@@ -9,11 +9,21 @@ apps/mcli          JSON CLI (mcli)
 apps/mtui          Interactive TUI (mtui)
 apps/mcp           Next.js dashboard + remote MCP server
 packages/shared    Magister client, auth, and presenters
+packages/sdk       New standalone TypeScript SDK
 ```
 
 `@magister/shared` talks to Magister's APIs and owns token storage. The apps are thin wrappers around it.
 
-## Install and run the clients
+## TypeScript SDK
+
+> [!WARNING]
+> `magister-sdk` is a very early work in progress. Its API, types, authentication flow, and storage format may change without notice. It is not published for production use yet.
+
+The new SDK is a cleaner, typed Magister client intended for direct use in TypeScript applications. It currently covers authentication, accounts, enrollments, schedules, grades, messages, assignments, and study guides, including message composition and file uploads.
+
+See the [SDK README](packages/sdk/README.md) for setup, examples, the complete method reference, and current limitations.
+
+## Requirements
 
 Download the archive for your platform from the [latest release](https://github.com/nanderq/magister-utils/releases/latest), then extract it. The archive contains two standalone binaries:
 

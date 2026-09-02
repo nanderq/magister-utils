@@ -10,6 +10,112 @@ The repo already has the right raw ingredients for an SDK, but they are not arra
 
 The main structural issue is that the reusable code is still organized as an internal support package instead of a stable public developer product.
 
+## Port gap audit
+
+Comparison baseline:
+
+- Shared implementation: [`packages/shared/src/magister.ts`](../packages/shared/src/magister.ts)
+- Current SDK client: [`packages/sdk/src/client/MagisterClient.ts`](../packages/sdk/src/client/MagisterClient.ts)
+- Current SDK exports: [`packages/sdk/src/index.ts`](../packages/sdk/src/index.ts)
+
+### Already ported into `packages/sdk`
+
+- Auth/session lifecycle: `login`, `session`, `hasSession`, `ensureSession`, `logout`
+- Account: `account`, `enrollments`
+- Grades: latest enrollment grade overview only
+- Assignments: list + detail
+- Study guides: list + detail + part + file extraction
+
+### Missing runtime capabilities
+
+These exist in the shared client but do not exist in the SDK client yet.
+
+- Schedule list: `getSchedule(personId, from, to)`
+- Appointment detail: `getAppointment(personId, appointmentId)`
+- Messages list: `getMessages({ skip, top })`
+- Message detail: `getMessage(messageId)`
+- Message attachments: `getMessageAttachments(messageId)`
+- Message detail convenience: `getMessageWithAttachments(messageId)`
+- Contact search: `searchContacts(query, { top, type })`
+- File upload: `uploadFile(body, { contentType })`
+- Send message: `sendMessage(payload)`
+
+### Missing client/session management capabilities
+
+These are part of the shared `MagisterClient` shape and are not represented in the SDK client yet.
+
+- Constructing a client directly from stored tokens: `MagisterClient.fromTokensFile(...)`
+- Reading current tokens: `getTokens()`
+- Replacing tokens: `setTokens(...)`
+- Explicit token refresh: `refreshTokens()`
+- Base URL resolution/cache access: `ensureBaseUrl()`
+- Full auth/account state access: `getAuthState()`
+- Derived person id convenience: `getPersonId()`
+- Low-level authenticated request helpers: `request(...)`
+
+### Missing public helper exports
+
+The shared module exports a large helper surface that has not been ported or re-exposed from the SDK package.
+
+- Auth helpers: `generateLoginURL`, `parseAuthResponse`, `exchangeCodeForTokens`, `refreshTokens`
+- Token file helpers: `getGlobalTokensFilePath`, `getDefaultTokensFilePath`, `ensureParentDir`, `readTokensFile`, `writeTokensFile`, `loadStoredTokens`
+- Identity helpers: `parseIdToken`, `resolveAccountName`, `getMagisterBaseUrl`, `getMagisterAccount`, `getGlobalAuthState`, `buildGlobalAuthState`
+- Formatting/content helpers: `formatDateYYYYMMDD`, `decodeEntities`, `htmlToText`, `readAppointmentHomework`, `formatBytes`
+- Download URL helpers: `resolveDownloadUrl`, `resolveAppointmentAttachmentDownloadUrl`, `resolveAssignmentAttachmentDownloadUrl`, `buildStudyGuideAttachmentUrl`
+
+### Missing public types
+
+The SDK currently exports only account, enrollment, grades, assignments, study guides, session, and tokens. The following shared types are still missing from the SDK public surface.
+
+- `AccountInfo`
+- `AccountPrivilege`
+- `MagisterAccount`
+- `GlobalAuthState`
+- `GradePeriod`
+- `GradeSubject`
+- `GradesOverviewResult`
+- `ScheduleItem`
+- `ScheduleResponse`
+- `AppointmentAttachmentLink`
+- `AppointmentAttachment`
+- `AppointmentDetail`
+- `AssignmentsResponse`
+- `StudyGuidesResponse`
+- `MessageSender`
+- `MessageRecipient`
+- `MessageItem`
+- `MessagesResponse`
+- `MessageDetail`
+- `MessageAttachment`
+- `AttachmentsResponse`
+- `Contact`
+- `ContactsResponse`
+- `UploadedAttachment`
+- `MessageRecipientRef`
+- `MessageAttachmentRef`
+- `SendMessagePayload`
+- `LoginURLOptions`
+- `MagisterCredentials`
+- `CredentialLoginOptions`
+- `TokensFileShape`
+- `TokenKey`
+- `MagisterClientOptions`
+
+### Behavior and API mismatches
+
+- The shared client supports both raw grade overview by school year and convenience latest-grade access. The SDK only implements the convenience path, so callers cannot target a specific enrollment or receive `schoolYearId` and `schoolYearEnd` metadata.
+- The shared client is token-first. The SDK client is credential-first. For a reusable SDK, the token-first shape is usually the cleaner base layer because it supports CLI, MCP, browser, and external app reuse without forcing a fresh login flow.
+- The shared token shape uses Magister field names (`access_token`, `refresh_token`, `id_token`). The SDK token shape renames them to camelCase and adds `expiresAt`. That is not wrong, but it means the port is not yet a clean structural split of raw vs normalized auth models.
+- `packages/sdk/src/types.ts` currently narrows some shared raw shapes, especially `Enrollment` and `Account.Groep.Privileges`, which makes the SDK less faithful to the real shared implementation.
+- The SDK currently exports only the high-level client and a subset of types from [`packages/sdk/src/index.ts`](../packages/sdk/src/index.ts). Resource functions, auth helpers, and utilities are not organized into a stable public surface yet.
+
+### Priority order
+
+1. Port schedule and message resources first. They are real end-user features already present in the shared implementation and currently absent from the SDK.
+2. Add token-first client construction and auth-state helpers. Without that, the SDK is harder to embed cleanly in other apps.
+3. Expose helper utilities for downloads and HTML/text normalization. Those are already part of the practical developer workflow around Magister payloads.
+4. Normalize the public model strategy: decide which types stay raw Magister-shaped and which become cleaned SDK-shaped, then keep that consistent across every resource.
+
 ## Recommendation
 
 Build the SDK as a publishable package in `packages/sdk`, not `apps/sdk`.
