@@ -9,11 +9,21 @@ apps/mcli          JSON CLI (mcli)
 apps/mtui          Interactive TUI (mtui)
 apps/mcp           Next.js dashboard + remote MCP server
 packages/shared    Magister client, auth, and presenters
+packages/sdk       New standalone TypeScript SDK
 ```
 
 `@magister/shared` talks to Magister's APIs and owns token storage. The apps are thin wrappers around it.
 
-## Install and run the clients
+## TypeScript SDK
+
+> [!WARNING]
+> `magister-sdk` is a very early work in progress. Its API, types, authentication flow, and storage format may change without notice. It is not published for production use yet.
+
+The new SDK is a cleaner, typed Magister client intended for direct use in TypeScript applications. It currently covers authentication, accounts, enrollments, schedules, grades, messages, assignments, and study guides, including message composition and file uploads.
+
+See the [SDK README](packages/sdk/README.md) for setup, examples, the complete method reference, and current limitations.
+
+## Requirements
 
 Download the archive for your platform from the [latest release](https://github.com/nanderq/magister-utils/releases/latest), then extract it. The archive contains two standalone binaries:
 
@@ -33,7 +43,7 @@ On Windows, run:
 .\mcli.exe setup
 ```
 
-Setup walks through school URL, username, and password, then writes tokens to `~/.config/magister/tokens.json` (or `%USERPROFILE%\.config\magister\tokens.json` on Windows). That file is shared by `mcli` and `mtui`. Override the path with `MAGISTER_TOKENS_FILE` if you need to.
+Setup walks through school URL, username, and password, then writes tokens to `~/.config/magister/shared-tokens.json` (or `%USERPROFILE%\.config\magister\shared-tokens.json` on Windows). That legacy shared-package file is used by `mcli`, `mtui`, and `mcp`. Override the path with `MAGISTER_TOKENS_FILE` if you need to.
 
 A leftover `tokens.json` in the working directory is still picked up as a fallback. Prefer the global file.
 
@@ -124,7 +134,7 @@ Tagged releases are built for Linux, macOS, and Windows. They contain only the `
 
 ## Tokens
 
-Treat `tokens.json` like a password. Rotating Magister credentials or wiping `~/.config/magister/tokens.json` means running `mcli setup` again (or `bun run setup` in a development checkout).
+Treat token files like passwords. Rotating Magister credentials or wiping `~/.config/magister/shared-tokens.json` means running `mcli setup` again (or `bun run setup` in a development checkout).
 
 ## Disclaimer
 

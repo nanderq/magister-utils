@@ -1,0 +1,40 @@
+{
+  "name": "magister-sdk",
+  "version": "0.1.0-alpha.1",
+  "type": "module",
+  "description": "Typed TypeScript SDK for Magister",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nanderq/magister-utils.git"
+  },
+  "homepage": "https://github.com/nanderq/magister-utils#readme",
+  "bugs": {
+    "url": "https://github.com/nanderq/magister-utils/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "bun": ">=1.3.10"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build ./src/index.ts --outfile ./dist/index.js --target bun --format esm && tsc -p tsconfig.build.json",
+    "debug": "bun run debug.ts",
+    "prepublishOnly": "bun run build",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}

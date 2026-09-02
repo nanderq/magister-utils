@@ -9,7 +9,8 @@
     "jsxImportSource": "react",
     "allowImportingTsExtensions": true,
     "paths": {
-      "@magister/shared": ["./packages/shared/src/index.ts"]
+      "@magister/shared": ["./packages/shared/src/index.ts"],
+      "magister-sdk": ["./packages/sdk/src/index.ts"]
     }
   },
   "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "packages/**/*.tsx"]

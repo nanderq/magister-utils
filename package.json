@@ -27,8 +27,8 @@
     "mcli": "bun run apps/mcli/src/index.ts",
     "mtui": "bun run apps/mtui/src/index.tsx",
     "setup": "bun run apps/mcli/src/index.ts setup",
-    "test": "bun test packages/shared apps/mcp/src/lib",
-    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd apps/mcli typecheck && bun run --cwd apps/mtui typecheck && bun run --cwd apps/mcp typecheck",
+    "test": "bun test packages/shared packages/sdk apps/mcp/src/lib",
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd packages/sdk typecheck && bun run --cwd apps/mcli typecheck && bun run --cwd apps/mtui typecheck && bun run --cwd apps/mcp typecheck",
     "version:release": "bun scripts/update-release-package-versions.ts",
     "tui": "bun run apps/mtui/src/index.tsx"
   },
@@ -36,5 +36,8 @@
     "@types/react": "^19.2.18",
     "bun-types": "latest",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@types/node": "^26.4.1"
   }
 }

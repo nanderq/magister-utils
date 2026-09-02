@@ -228,7 +228,7 @@ describe("token file resolution", () => {
     const root = mkdtempSync(join(tmpdir(), "magister-token-resolution-"));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
-    const globalPath = join(home, ".config", "magister", "tokens.json");
+    const globalPath = join(home, ".config", "magister", "shared-tokens.json");
     const localPath = join(workspace, "tokens.json");
 
     try {
