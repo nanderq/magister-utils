@@ -14,6 +14,11 @@ const storedTokens: Tokens = {
     expiresAt: Date.now() + 3_600_000,
 };
 
+const account = {
+    tenant: "school.magister.net",
+    username: "student@example.com",
+};
+
 function tempStore() {
     return new TokenStore({
         path: join(mkdtempSync(join(tmpdir(), "magister-sdk-")), "tokens.json"),
@@ -102,7 +107,7 @@ describe("MagisterClient", () => {
     test("session() restores a stored session", async () => {
         globalThis.fetch = mockFetch();
         const tokenStore = tempStore();
-        await tokenStore.store(storedTokens);
+        await tokenStore.store(storedTokens, account);
 
         const client = new MagisterClient(
             "school.magister.net",
@@ -127,7 +132,7 @@ describe("MagisterClient", () => {
         }) as typeof fetch;
 
         const tokenStore = tempStore();
-        await tokenStore.store(storedTokens);
+        await tokenStore.store(storedTokens, account);
 
         const client = new MagisterClient(
             "school.magister.net",
@@ -157,10 +162,61 @@ describe("MagisterClient", () => {
         });
     });
 
+    test("ensureSession() logs in when the stored refresh token is rejected", async () => {
+        const fetchMock = mockFetch();
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            const url = input instanceof Request ? input.url : input.toString();
+            if (
+                url === "https://accounts.magister.net/connect/token"
+                && String(init?.body).includes("grant_type=refresh_token")
+            ) {
+                return Response.json({ error: "invalid_grant" }, { status: 400 });
+            }
+            return fetchMock(input, init);
+        }) as typeof fetch;
+        const tokenStore = tempStore();
+        await tokenStore.store({
+            ...storedTokens,
+            expiresAt: Date.now() - 1,
+        }, account);
+        const client = new MagisterClient(
+            account.tenant,
+            account.username,
+            "secret",
+            tokenStore,
+        );
+
+        await expect(client.ensureSession()).resolves.toMatchObject({
+            accessToken: "fresh-access",
+        });
+    });
+
+    test("ensureSession() replaces tokens belonging to another account", async () => {
+        globalThis.fetch = mockFetch();
+        const tokenStore = tempStore();
+        await tokenStore.store(storedTokens, {
+            tenant: "other.magister.net",
+            username: "other@example.com",
+        });
+        const client = new MagisterClient(
+            account.tenant,
+            account.username,
+            "secret",
+            tokenStore,
+        );
+
+        await expect(client.ensureSession()).resolves.toMatchObject({
+            accessToken: "fresh-access",
+        });
+        await expect(tokenStore.read(account)).resolves.toMatchObject({
+            accessToken: "fresh-access",
+        });
+    });
+
     test("login() creates a new session even when one is stored", async () => {
         globalThis.fetch = mockFetch();
         const tokenStore = tempStore();
-        await tokenStore.store(storedTokens);
+        await tokenStore.store(storedTokens, account);
 
         const client = new MagisterClient(
             "school.magister.net",
@@ -177,7 +233,7 @@ describe("MagisterClient", () => {
     test("logout() removes the session so it cannot be reused", async () => {
         globalThis.fetch = mockFetch();
         const tokenStore = tempStore();
-        await tokenStore.store(storedTokens);
+        await tokenStore.store(storedTokens, account);
 
         const client = new MagisterClient(
             "school.magister.net",

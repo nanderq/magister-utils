@@ -6,6 +6,11 @@ import { join } from "node:path";
 import { AuthManager } from "../../src/auth/AuthManager";
 import { TokenStore } from "../../src/auth/token-store";
 
+const account = {
+    tenant: "school.magister.net",
+    username: "student@example.com",
+};
+
 function mockLoginFetch() {
     return (async (input: string | URL | Request) => {
         const url = input instanceof Request ? input.url : input.toString();
@@ -143,7 +148,7 @@ describe("AuthManager", () => {
             refreshToken: "refresh-token",
             idToken: "id-token",
             expiresAt: Date.now() + 3_600_000,
-        });
+        }, account);
 
         const auth = new AuthManager({
             tenant: "school.magister.net",
@@ -184,7 +189,7 @@ describe("AuthManager", () => {
             refreshToken: "refresh-token",
             idToken: "id-token",
             expiresAt: Date.now() - 1,
-        });
+        }, account);
 
         const auth = new AuthManager({
             tenant: "school.magister.net",
@@ -219,9 +224,33 @@ describe("AuthManager", () => {
             refreshToken: "refresh-token",
             idToken: "id-token",
             expiresAt: Date.now() - 1,
-        });
+        }, account);
 
         await expect(auth.hasSession()).resolves.toBe(true);
+    });
+
+    test("does not accept stored tokens belonging to another account", async () => {
+        const tokenStore = new TokenStore({
+            path: join(mkdtempSync(join(tmpdir(), "magister-sdk-")), "tokens.json"),
+        });
+        await tokenStore.store({
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            idToken: "id-token",
+            expiresAt: Date.now() + 3_600_000,
+        }, {
+            tenant: "other.magister.net",
+            username: "other@example.com",
+        });
+        const auth = new AuthManager({
+            tenant: account.tenant,
+            username: account.username,
+            password: "secret",
+            tokenStore,
+        });
+
+        await expect(auth.hasSession()).resolves.toBe(false);
+        await expect(auth.session()).rejects.toThrow("Token file belongs to another Magister account");
     });
 
     test("deduplicates concurrent login calls", async () => {

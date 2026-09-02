@@ -15,6 +15,11 @@ const tokens: Tokens = {
     expiresAt: Date.now() + 3_600_000,
 };
 
+const tokenAccount = {
+    tenant: "school.magister.net",
+    username: "student@example.com",
+};
+
 const accountPayload: Account = {
     UuId: "account-uuid",
     Persoon: {
@@ -67,7 +72,7 @@ describe("MagisterClient.account", () => {
         }) as typeof fetch;
 
         const tokenStore = tempStore();
-        await tokenStore.store(tokens);
+        await tokenStore.store(tokens, tokenAccount);
 
         const client = new MagisterClient(
             "school.magister.net",
@@ -100,7 +105,7 @@ describe("MagisterClient.account", () => {
         }) as typeof fetch;
 
         const tokenStore = tempStore();
-        await tokenStore.store(tokens);
+        await tokenStore.store(tokens, tokenAccount);
 
         const client = new MagisterClient(
             "school.magister.net",
@@ -134,7 +139,7 @@ describe("MagisterClient.account", () => {
             throw new Error(`Unexpected request: ${url}`);
         }) as typeof fetch;
         const tokenStore = tempStore();
-        await tokenStore.store(tokens);
+        await tokenStore.store(tokens, tokenAccount);
         const client = new MagisterClient("school.magister.net", "student@example.com", "secret", tokenStore);
 
         await expect(client.account()).resolves.toEqual(accountPayload);

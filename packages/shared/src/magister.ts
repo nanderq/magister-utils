@@ -920,7 +920,12 @@ export async function refreshTokens(
 }
 
 export function getGlobalTokensFilePath(): string {
-  return join(process.env.HOME ?? ".", ".config", "magister", "tokens.json");
+  return join(
+    process.env.HOME ?? ".",
+    ".config",
+    "magister",
+    "shared-tokens.json",
+  );
 }
 
 export function getDefaultTokensFilePath(): string {

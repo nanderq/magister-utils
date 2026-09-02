@@ -75,11 +75,7 @@ class MagisterClient {
         /*
         Ensure a session exists. If no session exists, login.
         */
-        if (await this.auth.hasSession()) {
-            return this.auth.session();
-        }
-
-        return this.auth.login();
+        return this.auth.ensureSession();
     }
 
     async logout(): Promise<void> {

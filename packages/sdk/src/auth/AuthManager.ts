@@ -6,6 +6,7 @@ import {
     MAGISTER_REDIRECT_URI,
 } from "../constants";
 import { TokenStore } from "./token-store";
+import type { TokenStoreAccount } from "./token-store";
 import type { Session, Tokens } from "../types";
 
 export interface AuthManagerOptions {
@@ -58,7 +59,7 @@ export class AuthManager {
         this.clearSession();
         const { code, codeVerifier } = await this.getAuthorizationCode();
         const tokens = await this.fetchTokens(code, codeVerifier);
-        await this.tokenStore.store(tokens);
+        await this.tokenStore.store(tokens, this.account());
         this.tokens = tokens;
         return this.session();
     }
@@ -84,10 +85,21 @@ export class AuthManager {
         if (this.isUsable(this.tokens)) return true;
 
         try {
-            const tokens = await this.tokenStore.read();
+            const tokens = await this.tokenStore.read(this.account());
             return this.isUsable(tokens) || tokens.refreshToken.length > 0;
         } catch {
             return false;
+        }
+    }
+
+    async ensureSession(): Promise<Session> {
+        if (!(await this.hasSession())) return this.login();
+
+        try {
+            return await this.session();
+        } catch (error) {
+            if (!(error instanceof TokenRefreshError)) throw error;
+            return this.login();
         }
     }
 
@@ -105,9 +117,9 @@ export class AuthManager {
     }
 
     private async performRefresh(): Promise<Session> {
-        const tokens = this.tokens ?? await this.tokenStore.read();
+        const tokens = this.tokens ?? await this.tokenStore.read(this.account());
         const refreshed = await this.refreshTokens(tokens);
-        await this.tokenStore.store(refreshed);
+        await this.tokenStore.store(refreshed, this.account());
         this.tokens = refreshed;
         this.cachedBaseUrl = null;
         const baseUrl = await this.ensureBaseUrl(refreshed.accessToken);
@@ -122,7 +134,7 @@ export class AuthManager {
         this.tokens = tokens;
         this.cachedBaseUrl = null;
         this.sessionPromise = null;
-        return this.tokenStore.store(tokens);
+        return this.tokenStore.store(tokens, this.account());
     }
 
     async deleteTokens(): Promise<void> {
@@ -161,7 +173,7 @@ export class AuthManager {
             return this.tokens;
         }
 
-        const tokens = await this.tokenStore.read();
+        const tokens = await this.tokenStore.read(this.account());
         if (this.isUsable(tokens)) {
             this.tokens = tokens;
             return tokens;
@@ -169,7 +181,7 @@ export class AuthManager {
 
         if (tokens.refreshToken) {
             const refreshed = await this.refreshTokens(tokens);
-            await this.tokenStore.store(refreshed);
+            await this.tokenStore.store(refreshed, this.account());
             this.tokens = refreshed;
             this.cachedBaseUrl = null;
             return refreshed;
@@ -189,6 +201,10 @@ export class AuthManager {
         this.tokens = null;
         this.cachedBaseUrl = null;
         this.sessionPromise = null;
+    }
+
+    private account(): TokenStoreAccount {
+        return { tenant: this.tenant, username: this.username };
     }
 
     private async getAuthorizationCode(): Promise<{ code: string; codeVerifier: string }> {
@@ -326,7 +342,7 @@ export class AuthManager {
             error_description?: string;
         };
         if (!response.ok || !payload.access_token) {
-            throw new Error(
+            throw new TokenRefreshError(
                 payload.error_description ?? payload.error ?? `Token refresh failed (${response.status})`,
             );
         }
@@ -336,6 +352,13 @@ export class AuthManager {
             idToken: payload.id_token ?? tokens.idToken,
             expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
         };
+    }
+}
+
+class TokenRefreshError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "TokenRefreshError";
     }
 }
 
