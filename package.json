@@ -33,11 +33,11 @@
     "tui": "bun run apps/mtui/src/index.tsx"
   },
   "devDependencies": {
-    "@types/react": "^19.2.18",
+    "@types/react": "^19.3.0",
     "bun-types": "latest",
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@types/node": "^26.4.1"
+    "@types/node": "^26.6.1"
   }
 }
