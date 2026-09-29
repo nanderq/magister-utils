@@ -19,7 +19,7 @@ packages/sdk       New standalone TypeScript SDK
 > [!WARNING]
 > `magister-sdk` is a very early work in progress. Its API, types, authentication flow, and storage format may change without notice. It is not published for production use yet.
 
-The new SDK is a cleaner, typed Magister client intended for direct use in TypeScript applications. It currently covers authentication, accounts, enrollments, schedules, grades, messages, assignments, and study guides, including message composition and file uploads.
+The new SDK is a cleaner, typed Magister client intended for direct use in TypeScript applications. It currently covers authentication, accounts, enrollments, schedules, grades, messages, assignments, and study guides, including message composition, file uploads, and assignment turn-in.
 
 See the [SDK README](packages/sdk/README.md) for setup, examples, the complete method reference, and current limitations.
 

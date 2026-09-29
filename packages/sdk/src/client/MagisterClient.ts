@@ -2,7 +2,13 @@ import { AuthManager } from "../auth/AuthManager";
 import { TokenStore } from "../auth/token-store";
 import { getAccount, getEnrollments } from "../resources/account";
 import { getGrades } from "../resources/grades";
-import { getAssignment, getAssignments } from "../resources/assignments";
+import {
+    getAssignment,
+    getAssignmentUploadSettings,
+    getAssignments,
+    submitAssignment,
+} from "../resources/assignments";
+import type { SubmitAssignmentInput } from "../resources/assignments";
 import { getAppointment, getSchedule } from "../resources/schedule";
 import {
     getMessage,
@@ -20,6 +26,8 @@ import type {
     AppointmentDetail,
     AssignmentDetail,
     AssignmentItem,
+    AssignmentUploadSettings,
+    AssignmentVersion,
     Enrollment,
     GradeItem,
     ScheduleItem,
@@ -141,6 +149,20 @@ class MagisterClient {
     async assignment(personId: number, assignmentId: number): Promise<AssignmentDetail> {
         return this.withSession((session) =>
             getAssignment(session.baseUrl, session.accessToken, personId, assignmentId));
+    }
+
+    async assignmentUploadSettings(personId: number): Promise<AssignmentUploadSettings> {
+        return this.withSession((session) =>
+            getAssignmentUploadSettings(session.baseUrl, session.accessToken, personId));
+    }
+
+    async submitAssignment(
+        personId: number,
+        assignmentId: number,
+        input: SubmitAssignmentInput,
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            submitAssignment(session.baseUrl, session.accessToken, personId, assignmentId, input));
     }
 
     async messages(options: GetMessagesOptions = {}): Promise<MessageItem[]> {
