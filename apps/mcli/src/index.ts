@@ -14,6 +14,7 @@ import {
   presentScheduleItem,
   presentStudyGuide,
   presentStudyGuideDetail,
+  studyGuideFilesByPartId,
 } from "@magister/shared";
 
 // ---------------------------------------------------------------------------
@@ -165,7 +166,7 @@ async function handleCapabilities(): Promise<void> {
       },
       {
         name: "study-guide",
-        description: "Returns the full detail of a single study guide including its parts.",
+        description: "Returns the full detail of a single study guide including its parts and attachments.",
         flags: [],
         positional: [
           { name: "id", type: "integer", required: true, description: "The numeric study guide ID (obtained from the 'study-guides' command)." },
@@ -454,22 +455,9 @@ async function handleStudyGuide(): Promise<void> {
 
   const client = await loadClient("study-guide");
   const personId = await client.getPersonId();
-  const s = await client.getStudyGuide(personId, id);
+  const { guide, parts } = await client.getStudyGuideWithFiles(personId, id);
 
-  const rawParts = s.Onderdelen?.Items ?? s.Onderdelen?.items ?? [];
-
-  ok("study-guide", {
-    id: s.Id ?? null,
-    title: s.Titel ?? null,
-    from: s.Van ?? null,
-    to: s.TotEnMet ?? null,
-    parts: rawParts.map((p) => ({
-      id: p.Id ?? null,
-      title: p.Titel ?? null,
-      description: htmlToText(p.Omschrijving) || null,
-      order: p.Volgnummer ?? null,
-    })),
-  });
+  ok("study-guide", presentStudyGuideDetail(guide, studyGuideFilesByPartId(parts)));
 }
 
 // ---------------------------------------------------------------------------

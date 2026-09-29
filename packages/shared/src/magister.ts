@@ -289,6 +289,16 @@ export interface StudyGuideFile {
   contentType?: string;
 }
 
+export interface StudyGuidePartFiles {
+  part: StudyGuidePart;
+  files: StudyGuideFile[];
+}
+
+export interface StudyGuideDetailWithFiles {
+  guide: StudyGuideDetail;
+  parts: StudyGuidePartFiles[];
+}
+
 export interface MessageSender {
   naam?: string;
 }
@@ -1196,7 +1206,7 @@ export function resolveAssignmentAttachmentDownloadUrl(
 export function buildStudyGuideAttachmentUrl(
   baseUrl: string,
   personId: string,
-  studiewijzerId: string,
+  studiewijzerId: string | number,
   onderdeelId: number,
   fileId: number,
 ): string | null {
@@ -1208,17 +1218,68 @@ export function buildStudyGuideAttachmentUrl(
   }
 }
 
+export function resolveStudyGuideFileDownloadUrl(
+  baseUrl: string,
+  personId: string,
+  studiewijzerId: string | number,
+  onderdeelId: number,
+  file: StudyGuideFile,
+): string | null {
+  const fromHref = resolveDownloadUrl(baseUrl, file.href);
+  if (fromHref) return fromHref;
+  if (file.fileId == null) return null;
+  return buildStudyGuideAttachmentUrl(baseUrl, personId, studiewijzerId, onderdeelId, file.fileId);
+}
+
+export function studyGuideFilesByPartId(
+  parts: StudyGuidePartFiles[],
+): Record<number, StudyGuideFile[]> {
+  const result: Record<number, StudyGuideFile[]> = {};
+  for (const { part, files } of parts) {
+    if (typeof part.Id === "number") result[part.Id] = files;
+  }
+  return result;
+}
+
+export function mergeStudyGuideFiles(
+  preferred: StudyGuideFile[],
+  fallback: StudyGuideFile[],
+): StudyGuideFile[] {
+  const merged = new Map<string, StudyGuideFile>();
+  for (const file of [...fallback, ...preferred]) {
+    const key = file.fileId != null ? `id:${file.fileId}` : `${file.id}|${file.name}|${file.href ?? ""}`;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, file);
+      continue;
+    }
+    merged.set(key, {
+      ...existing,
+      ...file,
+      href: file.href ?? existing.href,
+      name: file.name || existing.name,
+      size: file.size ?? existing.size,
+      contentType: file.contentType ?? existing.contentType,
+    });
+  }
+  return [...merged.values()];
+}
+
+const STUDY_GUIDE_FILE_RELS = [
+  "download",
+  "contents",
+  "content",
+  "attachment",
+  "file",
+  "enclosure",
+];
+
 function extractHref(item: Record<string, unknown>): string | undefined {
   const links = item.Links;
   if (Array.isArray(links)) {
     const preferredRelOrder = [
-      "download",
-      "content",
-      "attachment",
-      "file",
-      "enclosure",
+      ...STUDY_GUIDE_FILE_RELS,
       "open",
-      "self",
     ];
     const linkCandidates = links.reduce<{ rel?: string; href: string }[]>(
       (acc, entry) => {
@@ -1257,9 +1318,8 @@ function extractHref(item: Record<string, unknown>): string | undefined {
       if (match) return match;
     }
 
-    const fallback = linkCandidates.find((candidate) => Boolean(candidate.href))
-      ?.href;
-    if (fallback) return fallback;
+    const unlabeled = linkCandidates.find((candidate) => !candidate.rel)?.href;
+    if (unlabeled) return unlabeled;
   }
 
   const directHref =
@@ -1278,6 +1338,7 @@ function extractHref(item: Record<string, unknown>): string | undefined {
   const objectLinks = item.links as
     | {
         download?: { href?: unknown } | string;
+        contents?: { href?: unknown } | string;
         content?: { href?: unknown } | string;
         self?: { href?: unknown } | string;
       }
@@ -1289,6 +1350,11 @@ function extractHref(item: Record<string, unknown>): string | undefined {
         : objectLinks?.download?.href,
     ) ??
     pickString(
+      typeof objectLinks?.contents === "string"
+        ? objectLinks.contents
+        : objectLinks?.contents?.href,
+    ) ??
+    pickString(
       typeof objectLinks?.content === "string"
         ? objectLinks.content
         : objectLinks?.content?.href,
@@ -1298,6 +1364,29 @@ function extractHref(item: Record<string, unknown>): string | undefined {
         ? objectLinks.self
         : objectLinks?.self?.href,
     )
+  );
+}
+
+function hasStudyGuideFileDownloadRel(item: Record<string, unknown>): boolean {
+  const links = item.Links;
+  if (Array.isArray(links)) {
+    for (const entry of links) {
+      if (!entry || typeof entry !== "object") continue;
+      const rel = (pickString((entry as { Rel?: unknown }).Rel) ?? pickString((entry as { rel?: unknown }).rel))
+        ?.toLowerCase();
+      if (rel && STUDY_GUIDE_FILE_RELS.includes(rel)) return true;
+    }
+  }
+  const objectLinks = item.links;
+  if (objectLinks && typeof objectLinks === "object" && !Array.isArray(objectLinks)) {
+    const linksObject = objectLinks as Record<string, unknown>;
+    if (linksObject.download || linksObject.contents || linksObject.content) return true;
+  }
+  return Boolean(
+    pickString(item.DownloadUrl) ??
+      pickString(item.downloadUrl) ??
+      pickString(item.BestandUrl) ??
+      pickString(item.bestandUrl),
   );
 }
 
@@ -1345,7 +1434,7 @@ export function extractStudyGuideFiles(payload: unknown): StudyGuideFile[] {
     const fileId = pickInteger(item.Id) ?? pickInteger(item.id);
 
     const hasFileSignal =
-      Boolean(href) ||
+      hasStudyGuideFileDownloadRel(item) ||
       size != null ||
       Boolean(contentType) ||
       Boolean(name && /\.[A-Za-z0-9]{2,5}$/.test(name));
@@ -1609,6 +1698,39 @@ export class MagisterClient {
       gebruikMappenStructuur,
     );
     return extractStudyGuideFiles(payload);
+  }
+
+  async getStudyGuideWithFiles(
+    personId: string,
+    studiewijzerId: string | number,
+  ): Promise<StudyGuideDetailWithFiles> {
+    const guide = await this.getStudyGuide(personId, studiewijzerId);
+    const parts = guide.Onderdelen?.Items ?? guide.Onderdelen?.items ?? [];
+    const baseUrl = await this.ensureBaseUrl();
+    const partsWithFiles = await Promise.all(parts.map(async (part) => {
+      if (typeof part.Id !== "number") return { part, files: [] as StudyGuideFile[] };
+      const embedded = extractStudyGuideFiles(part);
+      let fetched: StudyGuideFile[] = [];
+      try {
+        fetched = await this.getStudyGuideFiles(personId, studiewijzerId, part.Id);
+      } catch (error) {
+        if (!(error instanceof HttpStatusError) || error.status === 401) throw error;
+      }
+      return {
+        part,
+        files: mergeStudyGuideFiles(fetched, embedded).map((file) => ({
+          ...file,
+          href: resolveStudyGuideFileDownloadUrl(
+            baseUrl,
+            personId,
+            studiewijzerId,
+            part.Id as number,
+            file,
+          ) ?? file.href,
+        })),
+      };
+    }));
+    return { guide, parts: partsWithFiles };
   }
 
   async getMessages(options: { skip?: number; top?: number } = {}): Promise<MessageItem[]> {

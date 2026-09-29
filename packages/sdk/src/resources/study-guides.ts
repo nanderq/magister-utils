@@ -72,7 +72,7 @@ export function extractStudyGuideFiles(payload: unknown): StudyGuideFile[] {
         const size = readNumber(item, ["Grootte", "grootte", "Bestandsgrootte", "bestandsgrootte", "Size", "size"]);
         const contentType = readString(item, ["ContentType", "contentType", "MimeType", "mimeType"]);
         const filenameLooksLikeFile = name && /\.[A-Za-z0-9]{2,5}$/.test(name);
-        if (!href && size === undefined && !contentType && !filenameLooksLikeFile) return;
+        if (!hasFileDownloadRel(item) && size === undefined && !contentType && !filenameLooksLikeFile) return;
 
         const fileId = readNumber(item, ["Id", "id"]);
         const id = fileId?.toString() ?? `${name ?? "file"}-${href ?? ""}`;
@@ -136,12 +136,34 @@ function readHref(object: Record<string, unknown>): string | undefined {
 
     const links = object.Links.filter((link): link is Record<string, unknown> =>
         Boolean(link) && typeof link === "object");
-    const preferred = ["download", "content", "attachment", "file", "enclosure", "open", "self"];
+    const preferred = ["download", "contents", "content", "attachment", "file", "enclosure", "open"];
     for (const relation of preferred) {
         const link = links.find((candidate) =>
             readString(candidate, ["Rel", "rel"])?.toLowerCase() === relation);
         const href = link && readString(link, ["Href", "href", "Url", "url", "Uri", "uri"]);
         if (href) return href;
     }
-    return links.map((link) => readString(link, ["Href", "href", "Url", "url"])).find(Boolean);
+    const unlabeled = links.find((link) => !readString(link, ["Rel", "rel"]));
+    return unlabeled && readString(unlabeled, ["Href", "href", "Url", "url", "Uri", "uri"]);
+}
+
+const FILE_DOWNLOAD_RELS = new Set([
+    "download",
+    "contents",
+    "content",
+    "attachment",
+    "file",
+    "enclosure",
+]);
+
+function hasFileDownloadRel(object: Record<string, unknown>): boolean {
+    if (
+        readString(object, ["DownloadUrl", "downloadUrl", "BestandUrl", "bestandUrl"])
+    ) return true;
+    if (!Array.isArray(object.Links)) return false;
+    return object.Links.some((link) => {
+        if (!link || typeof link !== "object") return false;
+        const rel = readString(link as Record<string, unknown>, ["Rel", "rel"])?.toLowerCase();
+        return Boolean(rel && FILE_DOWNLOAD_RELS.has(rel));
+    });
 }
