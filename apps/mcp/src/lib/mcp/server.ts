@@ -8,6 +8,7 @@ import {
   presentStudyGuide,
   presentStudyGuideDetail,
 } from "@magister/shared/presenters";
+import { studyGuideFilesByPartId } from "@magister/shared/magister";
 import { z } from "zod";
 
 import { createMagisterClient } from "@/lib/magister/repository";
@@ -191,11 +192,13 @@ export function registerMagisterTools(server: ToolServer) {
 
   server.registerTool("get_study_guide", {
     title: "Get study guide",
-    description: "Return one study guide and its parts.",
+    description: "Return one study guide, its parts, and attachment metadata with download URLs.",
     inputSchema: { id: z.number().int().positive() },
     annotations: { readOnlyHint: true },
   }, async ({ id }: { id: number }, extra: ToolExtra) => runTool("get_study_guide", extra, async () => {
     const client = await createMagisterClient(getUserId(extra));
-    return presentStudyGuideDetail(await client.getStudyGuide(await client.getPersonId(), id));
+    const personId = await client.getPersonId();
+    const { guide, parts } = await client.getStudyGuideWithFiles(personId, id);
+    return presentStudyGuideDetail(guide, studyGuideFilesByPartId(parts));
   }));
 }

@@ -64,6 +64,33 @@ describe("study guides", () => {
         }]);
     });
 
+    test("prefers Contents links and ignores part Self links", () => {
+        const payload = {
+            Id: 2,
+            Titel: "Planning",
+            Links: [{ Rel: "Self", Href: "/onderdelen/2" }],
+            Bronnen: [{
+                Id: 9,
+                Naam: "PTA.pdf",
+                Grootte: 100,
+                ContentType: "application/pdf",
+                Links: [
+                    { Rel: "Self", Href: "/bronnen/9" },
+                    { Rel: "Contents", Href: "/bijlagen/9" },
+                ],
+            }],
+        };
+
+        expect(extractStudyGuideFiles(payload)).toEqual([{
+            id: "9",
+            fileId: 9,
+            name: "PTA.pdf",
+            href: "/bijlagen/9",
+            size: 100,
+            contentType: "application/pdf",
+        }]);
+    });
+
     test("rejects malformed list responses", async () => {
         globalThis.fetch = (async () => Response.json({ Items: null })) as unknown as typeof fetch;
         await expect(getStudyGuides(baseUrl, "token", 123)).rejects.toThrow(
