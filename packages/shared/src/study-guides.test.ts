@@ -43,6 +43,25 @@ describe("extractStudyGuideFiles", () => {
       Links: [{ Rel: "Self", Href: "/api/leerlingen/42/studiewijzers/13494/onderdelen/69601" }],
     })).toEqual([]);
   });
+
+  test("keeps a file that only has a Self link, without using that link as the download", () => {
+    expect(extractStudyGuideFiles({
+      Bronnen: [{
+        Id: 99,
+        Naam: "PTA.pdf",
+        Grootte: 2048,
+        ContentType: "application/pdf",
+        Links: [{ Rel: "Self", Href: "/api/leerlingen/42/studiewijzers/13494/onderdelen/69587/bronnen/99" }],
+      }],
+    })).toEqual([{
+      id: "99",
+      fileId: 99,
+      name: "PTA.pdf",
+      href: undefined,
+      size: 2048,
+      contentType: "application/pdf",
+    }]);
+  });
 });
 
 describe("study-guide download URLs", () => {
@@ -126,5 +145,47 @@ describe("MagisterClient.getStudyGuideWithFiles", () => {
       contentType: "application/pdf",
     }]);
     expect(requests.some((url) => url.includes("/onderdelen/69587?gebruikMappenStructuur=true"))).toBe(true);
+  });
+
+  test("keeps the guide when a part request fails and uses files embedded on that part", async () => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("host-meta")) {
+        return Response.json({ links: [{ href: "https://school.magister.net/api" }] });
+      }
+      if (url.endsWith("/studiewijzers/13494")) {
+        return Response.json({
+          Id: 13494,
+          Onderdelen: {
+            Items: [{
+              Id: 69587,
+              Bronnen: [{
+                Id: 99,
+                Naam: "PTA.pdf",
+                Grootte: 2048,
+                ContentType: "application/pdf",
+              }],
+            }],
+          },
+        });
+      }
+      if (url.includes("/onderdelen/69587")) return new Response("missing", { status: 404 });
+      throw new Error(`Unexpected request: ${url}`);
+    }) as typeof fetch;
+
+    const client = new MagisterClient({
+      tokens: { access_token: "access", refresh_token: "refresh", id_token: "id" },
+      autoPersistTokens: false,
+    });
+
+    const result = await client.getStudyGuideWithFiles("42", 13494);
+    expect(result.parts[0]?.files).toEqual([{
+      id: "99",
+      fileId: 99,
+      name: "PTA.pdf",
+      href: "https://school.magister.net/api/leerlingen/42/studiewijzers/13494/onderdelen/69587/bijlagen/99",
+      size: 2048,
+      contentType: "application/pdf",
+    }]);
   });
 });

@@ -136,14 +136,15 @@ function readHref(object: Record<string, unknown>): string | undefined {
 
     const links = object.Links.filter((link): link is Record<string, unknown> =>
         Boolean(link) && typeof link === "object");
-    const preferred = ["download", "contents", "content", "attachment", "file", "enclosure", "open", "self"];
+    const preferred = ["download", "contents", "content", "attachment", "file", "enclosure", "open"];
     for (const relation of preferred) {
         const link = links.find((candidate) =>
             readString(candidate, ["Rel", "rel"])?.toLowerCase() === relation);
         const href = link && readString(link, ["Href", "href", "Url", "url", "Uri", "uri"]);
         if (href) return href;
     }
-    return links.map((link) => readString(link, ["Href", "href", "Url", "url"])).find(Boolean);
+    const unlabeled = links.find((link) => !readString(link, ["Rel", "rel"]));
+    return unlabeled && readString(unlabeled, ["Href", "href", "Url", "url", "Uri", "uri"]);
 }
 
 const FILE_DOWNLOAD_RELS = new Set([

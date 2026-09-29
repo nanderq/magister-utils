@@ -1241,6 +1241,30 @@ export function studyGuideFilesByPartId(
   return result;
 }
 
+export function mergeStudyGuideFiles(
+  preferred: StudyGuideFile[],
+  fallback: StudyGuideFile[],
+): StudyGuideFile[] {
+  const merged = new Map<string, StudyGuideFile>();
+  for (const file of [...fallback, ...preferred]) {
+    const key = file.fileId != null ? `id:${file.fileId}` : `${file.id}|${file.name}|${file.href ?? ""}`;
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, file);
+      continue;
+    }
+    merged.set(key, {
+      ...existing,
+      ...file,
+      href: file.href ?? existing.href,
+      name: file.name || existing.name,
+      size: file.size ?? existing.size,
+      contentType: file.contentType ?? existing.contentType,
+    });
+  }
+  return [...merged.values()];
+}
+
 const STUDY_GUIDE_FILE_RELS = [
   "download",
   "contents",
@@ -1256,7 +1280,6 @@ function extractHref(item: Record<string, unknown>): string | undefined {
     const preferredRelOrder = [
       ...STUDY_GUIDE_FILE_RELS,
       "open",
-      "self",
     ];
     const linkCandidates = links.reduce<{ rel?: string; href: string }[]>(
       (acc, entry) => {
@@ -1295,9 +1318,8 @@ function extractHref(item: Record<string, unknown>): string | undefined {
       if (match) return match;
     }
 
-    const fallback = linkCandidates.find((candidate) => Boolean(candidate.href))
-      ?.href;
-    if (fallback) return fallback;
+    const unlabeled = linkCandidates.find((candidate) => !candidate.rel)?.href;
+    if (unlabeled) return unlabeled;
   }
 
   const directHref =
@@ -1687,10 +1709,16 @@ export class MagisterClient {
     const baseUrl = await this.ensureBaseUrl();
     const partsWithFiles = await Promise.all(parts.map(async (part) => {
       if (typeof part.Id !== "number") return { part, files: [] as StudyGuideFile[] };
-      const files = await this.getStudyGuideFiles(personId, studiewijzerId, part.Id);
+      const embedded = extractStudyGuideFiles(part);
+      let fetched: StudyGuideFile[] = [];
+      try {
+        fetched = await this.getStudyGuideFiles(personId, studiewijzerId, part.Id);
+      } catch (error) {
+        if (!(error instanceof HttpStatusError) || error.status === 401) throw error;
+      }
       return {
         part,
-        files: files.map((file) => ({
+        files: mergeStudyGuideFiles(fetched, embedded).map((file) => ({
           ...file,
           href: resolveStudyGuideFileDownloadUrl(
             baseUrl,

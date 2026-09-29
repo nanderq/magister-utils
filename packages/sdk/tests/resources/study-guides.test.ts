@@ -91,6 +91,24 @@ describe("study guides", () => {
         }]);
     });
 
+    test("does not use a Self link as the file download", () => {
+        expect(extractStudyGuideFiles({
+            Bronnen: [{
+                Id: 9,
+                Naam: "PTA.pdf",
+                Grootte: 100,
+                Links: [{ Rel: "Self", Href: "/bronnen/9" }],
+            }],
+        })).toEqual([{
+            id: "9",
+            fileId: 9,
+            name: "PTA.pdf",
+            href: undefined,
+            size: 100,
+            contentType: undefined,
+        }]);
+    });
+
     test("rejects malformed list responses", async () => {
         globalThis.fetch = (async () => Response.json({ Items: null })) as unknown as typeof fetch;
         await expect(getStudyGuides(baseUrl, "token", 123)).rejects.toThrow(
