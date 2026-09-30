@@ -20,10 +20,11 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # Do not set registry-url. It writes //registry.npmjs.org/:_authToken
+      # and a placeholder NODE_AUTH_TOKEN, and npm then skips OIDC.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
+          node-version: 24
 
       - run: bun install --frozen-lockfile
 
@@ -43,5 +44,21 @@ jobs:
       - run: bun run --cwd packages/sdk build
 
       - name: Publish to npm
-        run: npm publish
         working-directory: packages/sdk
+        shell: bash
+        run: |
+          # Trusted Publishing exchanges the GitHub OIDC token. Any classic
+          # token, including setup-node's placeholder, skips that exchange
+          # and the registry returns E404 for this unpublished package.
+          unset NODE_AUTH_TOKEN
+          if [[ -n "${NPM_CONFIG_USERCONFIG:-}" && -f "$NPM_CONFIG_USERCONFIG" ]]; then
+            grep -v '_authToken' "$NPM_CONFIG_USERCONFIG" > "${NPM_CONFIG_USERCONFIG}.clean" || true
+            mv "${NPM_CONFIG_USERCONFIG}.clean" "$NPM_CONFIG_USERCONFIG"
+          fi
+          npm_version="$(npm --version)"
+          echo "npm ${npm_version}"
+          if ! printf '%s\n%s\n' "11.5.1" "$npm_version" | sort -V -C; then
+            echo "npm ${npm_version} is older than 11.5.1, which Trusted Publishing requires." >&2
+            exit 1
+          fi
+          npm publish
