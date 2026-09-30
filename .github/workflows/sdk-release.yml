@@ -61,4 +61,6 @@ jobs:
             echo "npm ${npm_version} is older than 11.5.1, which Trusted Publishing requires." >&2
             exit 1
           fi
-          npm publish
+          # npm refuses prerelease versions (for example 0.1.0-alpha.2) unless
+          # an explicit dist-tag is set. "alpha" keeps this off the latest tag.
+          npm publish --tag alpha
