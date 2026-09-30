@@ -3,12 +3,25 @@ import { TokenStore } from "../auth/token-store";
 import { getAccount, getEnrollments } from "../resources/account";
 import { getGrades } from "../resources/grades";
 import {
+    createAssignmentDraft,
+    createAssignmentVersion,
+    downloadAssignmentAttachment,
     getAssignment,
     getAssignmentUploadSettings,
     getAssignments,
+    getAssignmentVersion,
+    getAssignmentVersionByHref,
+    listSubmittedAssignmentFiles,
+    resolveAssignmentContentsDownloadUrl,
+    resolveAssignmentIngeleverdDownloadUrl,
     submitAssignment,
+    updateAssignmentVersion,
 } from "../resources/assignments";
-import type { SubmitAssignmentInput } from "../resources/assignments";
+import type {
+    CreateAssignmentVersionInput,
+    GetAssignmentVersionOptions,
+    SubmitAssignmentInput,
+} from "../resources/assignments";
 import { getAppointment, getSchedule } from "../resources/schedule";
 import {
     getMessage,
@@ -28,6 +41,7 @@ import type {
     AssignmentItem,
     AssignmentUploadSettings,
     AssignmentVersion,
+    AssignmentVersionAttachment,
     Enrollment,
     GradeItem,
     ScheduleItem,
@@ -163,6 +177,75 @@ class MagisterClient {
     ): Promise<AssignmentVersion> {
         return this.withSession((session) =>
             submitAssignment(session.baseUrl, session.accessToken, personId, assignmentId, input));
+    }
+
+    async assignmentVersion(
+        personId: number,
+        versionId: number,
+        options: GetAssignmentVersionOptions = {},
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            getAssignmentVersion(session.baseUrl, session.accessToken, personId, versionId, options));
+    }
+
+    async assignmentVersionByHref(href: string): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            getAssignmentVersionByHref(session.baseUrl, session.accessToken, href));
+    }
+
+    async createAssignmentDraft(
+        personId: number,
+        assignmentId: number,
+        input: CreateAssignmentVersionInput = {},
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            createAssignmentDraft(session.baseUrl, session.accessToken, personId, assignmentId, input));
+    }
+
+    async createAssignmentVersion(
+        personId: number,
+        assignmentId: number,
+        version: AssignmentVersion,
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            createAssignmentVersion(session.baseUrl, session.accessToken, personId, assignmentId, version));
+    }
+
+    async updateAssignmentVersion(
+        personId: number,
+        assignmentId: number,
+        version: AssignmentVersion,
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            updateAssignmentVersion(session.baseUrl, session.accessToken, personId, assignmentId, version));
+    }
+
+    async assignmentContentsDownloadUrl(
+        attachment: AssignmentVersionAttachment,
+    ): Promise<string | null> {
+        return this.withSession(async (session) =>
+            resolveAssignmentContentsDownloadUrl(session.baseUrl, attachment));
+    }
+
+    async assignmentIngeleverdDownloadUrl(
+        personId: number,
+        attachment: AssignmentVersionAttachment,
+    ): Promise<string | null> {
+        return this.withSession(async (session) =>
+            resolveAssignmentIngeleverdDownloadUrl(session.baseUrl, attachment, personId));
+    }
+
+    async submittedAssignmentFiles(
+        personId: number,
+        version: AssignmentVersion,
+    ): Promise<{ attachment: AssignmentVersionAttachment; downloadUrl: string | null }[]> {
+        return this.withSession(async (session) =>
+            listSubmittedAssignmentFiles(session.baseUrl, version, personId));
+    }
+
+    async downloadAssignmentAttachment(downloadUrl: string): Promise<Uint8Array> {
+        return this.withSession((session) =>
+            downloadAssignmentAttachment(session.baseUrl, session.accessToken, downloadUrl));
     }
 
     async messages(options: GetMessagesOptions = {}): Promise<MessageItem[]> {
