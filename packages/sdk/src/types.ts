@@ -181,6 +181,9 @@ export interface AppointmentDetail {
 
 export interface AssignmentDetail extends AssignmentItem {
   Omschrijving?: string | null;
+  Vak?: string | null;
+  LaatsteOpdrachtVersienummer?: number | null;
+  Links?: unknown;
   Bijlagen?: {
     Id?: number;
     Naam?: string;
@@ -188,6 +191,50 @@ export interface AssignmentDetail extends AssignmentItem {
     Grootte?: number;
     [key: string]: unknown;
   }[];
+}
+
+export interface AssignmentUploadSettings {
+  MyDiskQuota?: number;
+  MaxUploadFileSize?: number;
+  BlacklistedExtensions?: string;
+  SharedDiskQuota?: number;
+  MySpaceUsed?: number;
+  [key: string]: unknown;
+}
+
+export interface AssignmentVersionAttachment {
+  Id?: number;
+  Naam?: string;
+  ContentType?: string;
+  Status?: number;
+  Datum?: string | null;
+  Grootte?: number;
+  Url?: string | null;
+  UniqueId?: string;
+  BronSoort?: number;
+  Links?: unknown;
+  [key: string]: unknown;
+}
+
+export interface AssignmentVersion {
+  Id?: number;
+  Links?: unknown;
+  Titel?: string | null;
+  Vak?: string | null;
+  Status?: number;
+  OpdrachtId?: number;
+  LeerlingOpmerking?: string | null;
+  DocentOpmerking?: string | null;
+  LeerlingBijlagen?: AssignmentVersionAttachment[];
+  FeedbackBijlagen?: unknown;
+  GestartOp?: string | null;
+  InleverenVoor?: string | null;
+  IngeleverdOp?: string | null;
+  Beoordeling?: string | null;
+  BeoordeeldOp?: string | null;
+  VersieNummer?: number;
+  IsTeLaat?: boolean;
+  [key: string]: unknown;
 }
 
 export interface StudyGuideItem {

@@ -6,6 +6,9 @@ export type {
     AppointmentDetail,
     AssignmentDetail,
     AssignmentItem,
+    AssignmentUploadSettings,
+    AssignmentVersion,
+    AssignmentVersionAttachment,
     Contact,
     Enrollment,
     GradeColumn,
@@ -29,6 +32,10 @@ export type {
     Tokens,
     UploadedAttachment,
 } from "./types";
+export type {
+    AssignmentSubmissionFile,
+    SubmitAssignmentInput,
+} from "./resources/assignments";
 export type {
     GetMessagesOptions,
     SearchContactsOptions,

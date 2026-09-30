@@ -3,7 +3,7 @@
 > [!WARNING]
 > This SDK is a very early work in progress. It is not published for production use, and its API, types, authentication flow, and token storage format may change without notice.
 
-`magister-sdk` is a typed TypeScript client for Magister. It handles login, token persistence and refresh, discovers the school API, and exposes account, schedule, grade, message, assignment, and study-guide operations through one client.
+`magister-sdk` is a typed TypeScript client for Magister. It handles login, token persistence and refresh, discovers the school API, and exposes account, schedule, grade, message, assignment, assignment turn-in, and study-guide operations through one client.
 
 The SDK is a cleaner successor to the experimental client in `@magister/shared`. It is currently developed and consumed from this monorepo.
 
@@ -181,12 +181,28 @@ Sending and uploading modify remote Magister data. The debug script deliberately
 ```ts
 const assignments = await client.assignments(personId, { skip: 0, top: 50 });
 const assignment = await client.assignment(personId, assignments[0].Id!);
+const settings = await client.assignmentUploadSettings(personId);
+const submitted = await client.submitAssignment(personId, assignment.Id!, {
+  note: "See the attached report.",
+  files: [{
+    name: "report.docx",
+    body: new Uint8Array([/* file bytes */]),
+    contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  }],
+});
+console.log(submitted.Id, submitted.IngeleverdOp);
 ```
 
 | Method | Returns | Description |
 | --- | --- | --- |
 | `assignments(personId, options?)` | `Promise<AssignmentItem[]>` | Lists assignments. `skip` defaults to `0`; `top` defaults to `250`. |
 | `assignment(personId, assignmentId)` | `Promise<AssignmentDetail>` | Returns assignment details and attachment metadata. |
+| `assignmentUploadSettings(personId)` | `Promise<AssignmentUploadSettings>` | Returns upload quota, maximum file size, and blacklisted extensions. |
+| `submitAssignment(personId, assignmentId, input)` | `Promise<AssignmentVersion>` | Turns in a new assignment version with one or more files and an optional student note. |
+
+`submitAssignment` follows the Magister assignment page. It loads the assignment, asks Magister for an upload slot per file (`POST /bestanden/upload`), stores the bytes with the returned method and required headers, creates a version (`POST /personen/{personId}/opdrachten/{assignmentId}/versie`), and finalizes it (`PUT /personen/{personId}/opdrachten/versie/{versionId}?opdrachtId={assignmentId}`). The returned version is the finalized submission. At least one file is required. Omit `note` to send an empty student comment.
+
+Turning in an assignment modifies remote Magister data. The debug script deliberately does not call `submitAssignment`.
 
 ## Study guides
 
@@ -211,7 +227,7 @@ if (partId) {
 
 ## Types and response shapes
 
-All public result and payload types are exported from `magister-sdk`, including account, enrollment, schedule, appointment, grade, message, contact, assignment, and study-guide types. Message option types and upload body types are exported as well.
+All public result and payload types are exported from `magister-sdk`, including account, enrollment, schedule, appointment, grade, message, contact, assignment, assignment submission, and study-guide types. Message option types and upload body types are exported as well.
 
 Magister response fields retain their upstream casing and Dutch names. Many fields are optional because actual payloads can differ between schools and account roles. Resource collections accept both Magister's `Items` and `items` response casing, but return plain arrays to callers.
 
