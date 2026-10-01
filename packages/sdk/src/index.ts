@@ -6,9 +6,12 @@ export type {
     AppointmentDetail,
     AssignmentDetail,
     AssignmentItem,
+    AssignmentLink,
     AssignmentUploadSettings,
     AssignmentVersion,
     AssignmentVersionAttachment,
+    ParsedVersieNavigatieItem,
+    VersieNavigatieItem,
     Contact,
     Enrollment,
     GradeColumn,
@@ -34,7 +37,17 @@ export type {
 } from "./types";
 export type {
     AssignmentSubmissionFile,
+    CreateAssignmentVersionInput,
+    GetAssignmentVersionOptions,
     SubmitAssignmentInput,
+} from "./resources/assignments";
+export {
+    buildAssignmentVersionDraft,
+    listSubmittedAssignmentFiles,
+    parseVersieNavigatieItems,
+    resolveAssignmentAttachmentDownloadUrl,
+    resolveAssignmentContentsDownloadUrl,
+    resolveAssignmentIngeleverdDownloadUrl,
 } from "./resources/assignments";
 export type {
     GetMessagesOptions,

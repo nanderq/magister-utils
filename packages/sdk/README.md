@@ -3,7 +3,7 @@
 > [!WARNING]
 > This SDK is a very early work in progress. It is not published for production use, and its API, types, authentication flow, and token storage format may change without notice.
 
-`magister-sdk` is a typed TypeScript client for Magister. It handles login, token persistence and refresh, discovers the school API, and exposes account, schedule, grade, message, assignment, assignment turn-in, and study-guide operations through one client.
+`magister-sdk` is a typed TypeScript client for Magister. It handles login, token persistence and refresh, discovers the school API, and exposes account, schedule, grade, message, assignment, assignment version history, assignment turn-in, and study-guide operations through one client.
 
 The SDK is a cleaner successor to the experimental client in `@magister/shared`. It is currently developed and consumed from this monorepo.
 
@@ -179,6 +179,8 @@ Sending and uploading modify remote Magister data. The debug script deliberately
 ## Assignments
 
 ```ts
+import { MagisterClient, parseVersieNavigatieItems } from "magister-sdk";
+
 const assignments = await client.assignments(personId, { skip: 0, top: 50 });
 const assignment = await client.assignment(personId, assignments[0].Id!);
 const settings = await client.assignmentUploadSettings(personId);
@@ -191,12 +193,37 @@ const submitted = await client.submitAssignment(personId, assignment.Id!, {
   }],
 });
 console.log(submitted.Id, submitted.IngeleverdOp);
+
+const versions = parseVersieNavigatieItems(assignment);
+const current = versions.at(-1);
+if (current) {
+  const version = current.selfHref
+    ? await client.assignmentVersionByHref(current.selfHref)
+    : await client.assignmentVersion(personId, current.id);
+  const turnedIn = await client.submittedAssignmentFiles(personId, version);
+  const firstFile = turnedIn[0];
+  if (firstFile?.downloadUrl) {
+    const bytes = await client.downloadAssignmentAttachment(firstFile.downloadUrl);
+    console.log(firstFile.attachment.Naam, bytes.byteLength);
+  }
+}
 ```
+
+`parseVersieNavigatieItems` is exported next to the client. `assignment.VersieNavigatieItems` lists earlier versions. Each item's `Omschrijving` is the version number as text, and its `Links` include `Self`, `Prev`, and `Next` hrefs such as `/api/personen/{personId}/opdrachten/versie/{versionId}`.
 
 | Method | Returns | Description |
 | --- | --- | --- |
 | `assignments(personId, options?)` | `Promise<AssignmentItem[]>` | Lists assignments. `skip` defaults to `0`; `top` defaults to `250`. |
-| `assignment(personId, assignmentId)` | `Promise<AssignmentDetail>` | Returns assignment details and attachment metadata. |
+| `assignment(personId, assignmentId)` | `Promise<AssignmentDetail>` | Returns assignment details, including `LaatsteOpdrachtVersienummer`, `VersieNavigatieItems`, and attachment metadata. |
+| `assignmentVersion(personId, versionId, options?)` | `Promise<AssignmentVersion>` | Loads one version. Set `nocache` to append a cache-busting query parameter. |
+| `assignmentVersionByHref(href)` | `Promise<AssignmentVersion>` | Loads the version at a navigation `Self` link. The link must stay on the school API origin. |
+| `createAssignmentDraft(personId, assignmentId, input?)` | `Promise<AssignmentVersion>` | Creates a draft version (`POST .../opdrachten/{assignmentId}/versie`) with `Id: -1` and the same fields turn-in uses. Does not finalize it. |
+| `createAssignmentVersion(personId, assignmentId, version)` | `Promise<AssignmentVersion>` | Posts a version body. The SDK always sends `Id: -1` for this call. |
+| `updateAssignmentVersion(personId, assignmentId, version)` | `Promise<AssignmentVersion>` | Updates or submits a version (`PUT .../opdrachten/versie/{versionId}?opdrachtId={assignmentId}`). |
+| `submittedAssignmentFiles(personId, version)` | `Promise<{ attachment, downloadUrl }[]>` | Lists `LeerlingBijlagen` on that version and resolves each Ingeleverd download URL. |
+| `assignmentIngeleverdDownloadUrl(personId, attachment)` | `Promise<string or null>` | Resolves a turned-in file. Uses the `Self` link when it points at `/opdrachten/bijlagen/Ingeleverd/{id}`, otherwise builds that path. |
+| `assignmentContentsDownloadUrl(attachment)` | `Promise<string or null>` | Resolves a teacher or assignment file from its `Contents` link. A `Self` link is not used. |
+| `downloadAssignmentAttachment(downloadUrl)` | `Promise<Uint8Array>` | Downloads a same-origin assignment bijlage with the session bearer token. |
 | `assignmentUploadSettings(personId)` | `Promise<AssignmentUploadSettings>` | Returns upload quota, maximum file size, and blacklisted extensions. |
 | `submitAssignment(personId, assignmentId, input)` | `Promise<AssignmentVersion>` | Turns in a new assignment version with one or more files and an optional student note. |
 
@@ -227,7 +254,7 @@ if (partId) {
 
 ## Types and response shapes
 
-All public result and payload types are exported from `magister-sdk`, including account, enrollment, schedule, appointment, grade, message, contact, assignment, assignment submission, and study-guide types. Message option types and upload body types are exported as well.
+All public result and payload types are exported from `magister-sdk`, including account, enrollment, schedule, appointment, grade, message, contact, assignment, assignment version navigation, assignment submission, and study-guide types. Message option types and upload body types are exported as well. Version navigation parsing and bijlage URL helpers (`parseVersieNavigatieItems`, `resolveAssignmentContentsDownloadUrl`, `resolveAssignmentIngeleverdDownloadUrl`) are exported as plain functions for callers that already have a base URL.
 
 Magister response fields retain their upstream casing and Dutch names. Many fields are optional because actual payloads can differ between schools and account roles. Resource collections accept both Magister's `Items` and `items` response casing, but return plain arrays to callers.
 

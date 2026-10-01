@@ -2,9 +2,12 @@ import { MagisterRequestError } from "../errors";
 import type {
     AssignmentDetail,
     AssignmentItem,
+    AssignmentLink,
     AssignmentUploadSettings,
     AssignmentVersion,
     AssignmentVersionAttachment,
+    ParsedVersieNavigatieItem,
+    VersieNavigatieItem,
 } from "../types";
 import { getJson } from "../utils/common";
 import type { UploadBody } from "./messages";
@@ -23,6 +26,18 @@ export interface AssignmentSubmissionFile {
 export interface SubmitAssignmentInput {
     files: AssignmentSubmissionFile[];
     note?: string;
+}
+
+export interface GetAssignmentVersionOptions {
+    /** When set, appends `nocache` to the version request. `true` uses the current timestamp. */
+    nocache?: string | number | boolean;
+}
+
+export interface CreateAssignmentVersionInput {
+    note?: string;
+    attachments?: AssignmentVersionAttachment[];
+    /** Defaults to the in-progress submission status used by `submitAssignment`. */
+    status?: number;
 }
 
 interface FileUploadTicket {
@@ -90,23 +105,9 @@ export async function submitAssignment(
         attachments.push(await uploadAssignmentFile(baseUrl, accessToken, file));
     }
 
-    const version = stripAngularFields({
-        Id: -1,
-        Links: assignment.Links ?? [],
-        Titel: assignment.Titel ?? null,
-        Vak: assignment.Vak ?? null,
-        Status: NEW_SUBMISSION_STATUS,
-        OpdrachtId: assignmentId,
-        LeerlingOpmerking: input.note ?? "",
-        DocentOpmerking: null,
-        LeerlingBijlagen: attachments,
-        FeedbackBijlagen: null,
-        GestartOp: new Date().toISOString(),
-        InleverenVoor: assignment.InleverenVoor ?? null,
-        IngeleverdOp: null,
-        Beoordeling: null,
-        BeoordeeldOp: null,
-        VersieNummer: nextVersionNumber(assignment.LaatsteOpdrachtVersienummer),
+    const version = buildAssignmentVersionDraft(assignment, assignmentId, {
+        note: input.note,
+        attachments,
     });
 
     const created = await createAssignmentVersion(
@@ -116,11 +117,173 @@ export async function submitAssignment(
         assignmentId,
         version,
     );
-    return finalizeAssignmentVersion(baseUrl, accessToken, personId, assignmentId, {
+    return updateAssignmentVersion(baseUrl, accessToken, personId, assignmentId, {
         ...version,
         Id: created.Id,
         Status: created.Status,
     });
+}
+
+export function parseVersieNavigatieItems(
+    source: AssignmentDetail | readonly VersieNavigatieItem[] | null | undefined,
+): ParsedVersieNavigatieItem[] {
+    const items = navigationItems(source);
+    if (!Array.isArray(items)) return [];
+
+    const parsed: ParsedVersieNavigatieItem[] = [];
+    for (const item of items) {
+        if (!item || typeof item !== "object") continue;
+        if (typeof item.Id !== "number" || !Number.isFinite(item.Id)) continue;
+        const links = Array.isArray(item.Links) ? item.Links : [];
+        const entry: ParsedVersieNavigatieItem = {
+            id: item.Id,
+            omschrijving: typeof item.Omschrijving === "string" ? item.Omschrijving : "",
+        };
+        const selfHref = findLinkHref(links, "self");
+        const prevHref = findLinkHref(links, "prev") ?? findLinkHref(links, "previous");
+        const nextHref = findLinkHref(links, "next");
+        if (selfHref) entry.selfHref = selfHref;
+        if (prevHref) entry.prevHref = prevHref;
+        if (nextHref) entry.nextHref = nextHref;
+        parsed.push(entry);
+    }
+    return parsed;
+}
+
+export async function getAssignmentVersion(
+    baseUrl: string,
+    accessToken: string,
+    personId: number,
+    versionId: number,
+    options: GetAssignmentVersionOptions = {},
+): Promise<AssignmentVersion> {
+    const url = assignmentVersionUrl(baseUrl, personId, versionId, options.nocache);
+    return getJson<AssignmentVersion>(url, accessToken, "Assignment version");
+}
+
+export async function getAssignmentVersionByHref(
+    baseUrl: string,
+    accessToken: string,
+    href: string,
+): Promise<AssignmentVersion> {
+    const url = resolveAssignmentVersionHref(baseUrl, href);
+    return getJson<AssignmentVersion>(url, accessToken, "Assignment version");
+}
+
+export function buildAssignmentVersionDraft(
+    assignment: AssignmentDetail,
+    assignmentId: number,
+    input: CreateAssignmentVersionInput = {},
+): AssignmentVersion {
+    return stripAngularFields({
+        Id: -1,
+        Links: assignment.Links ?? [],
+        Titel: assignment.Titel ?? null,
+        Vak: assignment.Vak ?? null,
+        Status: input.status ?? NEW_SUBMISSION_STATUS,
+        OpdrachtId: assignmentId,
+        LeerlingOpmerking: input.note ?? "",
+        DocentOpmerking: null,
+        LeerlingBijlagen: input.attachments ?? [],
+        FeedbackBijlagen: null,
+        GestartOp: new Date().toISOString(),
+        InleverenVoor: assignment.InleverenVoor ?? null,
+        IngeleverdOp: null,
+        Beoordeling: null,
+        BeoordeeldOp: null,
+        VersieNummer: nextVersionNumber(assignment.LaatsteOpdrachtVersienummer),
+    });
+}
+
+export async function createAssignmentDraft(
+    baseUrl: string,
+    accessToken: string,
+    personId: number,
+    assignmentId: number,
+    input: CreateAssignmentVersionInput = {},
+): Promise<AssignmentVersion> {
+    const assignment = await getAssignment(baseUrl, accessToken, personId, assignmentId);
+    return createAssignmentVersion(
+        baseUrl,
+        accessToken,
+        personId,
+        assignmentId,
+        buildAssignmentVersionDraft(assignment, assignmentId, input),
+    );
+}
+
+export function resolveAssignmentContentsDownloadUrl(
+    baseUrl: string,
+    attachment: AssignmentVersionAttachment,
+): string | null {
+    const href = findLinkHref(attachment.Links, "contents");
+    if (!href) return null;
+    return resolveSameOriginHref(baseUrl, href);
+}
+
+export function resolveAssignmentIngeleverdDownloadUrl(
+    baseUrl: string,
+    attachment: AssignmentVersionAttachment,
+    personId?: number,
+): string | null {
+    const href = findIngeleverdHref(attachment.Links);
+    if (href) {
+        const resolved = resolveSameOriginHref(baseUrl, href);
+        if (resolved) return resolved;
+    }
+    if (personId == null || typeof attachment.Id !== "number" || attachment.Id <= 0) return null;
+    try {
+        const origin = new URL(baseUrl).origin;
+        return `${origin}/api/personen/${personId}/opdrachten/bijlagen/Ingeleverd/${attachment.Id}`;
+    } catch {
+        return null;
+    }
+}
+
+export function resolveAssignmentAttachmentDownloadUrl(
+    baseUrl: string,
+    attachment: AssignmentVersionAttachment,
+    kind: "contents" | "ingeleverd",
+    personId?: number,
+): string | null {
+    return kind === "contents"
+        ? resolveAssignmentContentsDownloadUrl(baseUrl, attachment)
+        : resolveAssignmentIngeleverdDownloadUrl(baseUrl, attachment, personId);
+}
+
+export function listSubmittedAssignmentFiles(
+    baseUrl: string,
+    version: AssignmentVersion,
+    personId?: number,
+): { attachment: AssignmentVersionAttachment; downloadUrl: string | null }[] {
+    return (version.LeerlingBijlagen ?? []).map((attachment) => ({
+        attachment,
+        downloadUrl: resolveAssignmentIngeleverdDownloadUrl(baseUrl, attachment, personId),
+    }));
+}
+
+export async function downloadAssignmentAttachment(
+    baseUrl: string,
+    accessToken: string,
+    downloadUrl: string,
+): Promise<Uint8Array> {
+    const url = resolveSameOriginHref(baseUrl, downloadUrl);
+    if (!url || !isAssignmentBijlagePath(url)) {
+        throw new Error("Assignment attachment link is not an assignment bijlage URL");
+    }
+    const response = await fetch(url, {
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "*/*",
+        },
+    });
+    if (!response.ok) {
+        throw new MagisterRequestError(
+            `Assignment attachment download failed (${response.status}) for ${urlWithoutQuery(url)}`,
+            response.status,
+        );
+    }
+    return new Uint8Array(await response.arrayBuffer());
 }
 
 async function uploadAssignmentFile(
@@ -210,7 +373,7 @@ async function putFileBytes(
     }
 }
 
-async function createAssignmentVersion(
+export async function createAssignmentVersion(
     baseUrl: string,
     accessToken: string,
     personId: number,
@@ -221,7 +384,7 @@ async function createAssignmentVersion(
     const response = await fetch(url, {
         method: "POST",
         headers: jsonHeaders(accessToken),
-        body: JSON.stringify(version),
+        body: JSON.stringify(asNewVersionBody(version)),
     });
     if (!response.ok) {
         throw new MagisterRequestError(
@@ -239,22 +402,26 @@ async function createAssignmentVersion(
     return created;
 }
 
-async function finalizeAssignmentVersion(
+export async function updateAssignmentVersion(
     baseUrl: string,
     accessToken: string,
     personId: number,
     assignmentId: number,
     version: AssignmentVersion,
 ): Promise<AssignmentVersion> {
-    const url = `${baseUrl}/personen/${personId}/opdrachten/versie/${version.Id}?opdrachtId=${assignmentId}`;
+    const payload = stripAngularFields(version);
+    if (typeof payload.Id !== "number") {
+        throw new Error("Assignment version is missing an id");
+    }
+    const url = `${baseUrl}/personen/${personId}/opdrachten/versie/${payload.Id}?opdrachtId=${assignmentId}`;
     const response = await fetch(url, {
         method: "PUT",
         headers: jsonHeaders(accessToken),
-        body: JSON.stringify(version),
+        body: JSON.stringify(payload),
     });
     if (!response.ok) {
         throw new MagisterRequestError(
-            `Assignment submit failed (${response.status}) for ${url}`,
+            `Assignment version update failed (${response.status}) for ${url}`,
             response.status,
         );
     }
@@ -281,6 +448,102 @@ function headerRecord(value: unknown): Record<string, string> {
         headers[key] = String(header);
     }
     return headers;
+}
+
+function navigationItems(
+    source: AssignmentDetail | readonly VersieNavigatieItem[] | null | undefined,
+): readonly VersieNavigatieItem[] | null | undefined {
+    if (Array.isArray(source)) return source as readonly VersieNavigatieItem[];
+    return (source as AssignmentDetail | null | undefined)?.VersieNavigatieItems;
+}
+
+function asNewVersionBody(version: AssignmentVersion): AssignmentVersion {
+    const stripped = stripAngularFields(version);
+    const body: AssignmentVersion = { Id: -1 };
+    for (const [key, value] of Object.entries(stripped)) {
+        if (key === "Id") continue;
+        body[key] = value;
+    }
+    return body;
+}
+
+function assignmentVersionUrl(
+    baseUrl: string,
+    personId: number,
+    versionId: number,
+    nocache: GetAssignmentVersionOptions["nocache"],
+): string {
+    const url = `${baseUrl}/personen/${personId}/opdrachten/versie/${versionId}`;
+    if (nocache === undefined || nocache === false) return url;
+    const value = nocache === true ? String(Date.now()) : String(nocache);
+    return `${url}?${new URLSearchParams({ nocache: value })}`;
+}
+
+function resolveAssignmentVersionHref(baseUrl: string, href: string): string {
+    const url = resolveSameOriginHref(baseUrl, href);
+    if (!url || !new URL(url).pathname.toLowerCase().includes("/opdrachten/versie/")) {
+        throw new Error("Assignment version link is not an assignment version URL");
+    }
+    return url;
+}
+
+function findLinkHref(
+    links: AssignmentLink[] | null | undefined,
+    rel: string,
+): string | undefined {
+    if (!Array.isArray(links)) return;
+    for (const link of links) {
+        if (!link || typeof link !== "object") continue;
+        const linkRel = (link.Rel ?? link.rel ?? "").toLowerCase();
+        if (linkRel !== rel) continue;
+        const href = link.Href ?? link.href;
+        if (typeof href === "string" && href.trim()) return href.trim();
+    }
+}
+
+function findIngeleverdHref(links: AssignmentLink[] | null | undefined): string | undefined {
+    if (!Array.isArray(links)) return;
+    for (const link of links) {
+        if (!link || typeof link !== "object") continue;
+        const href = link.Href ?? link.href;
+        if (typeof href !== "string" || !href.toLowerCase().includes("/opdrachten/bijlagen/ingeleverd/")) {
+            continue;
+        }
+        const rel = (link.Rel ?? link.rel ?? "").toLowerCase();
+        if (rel === "self" || rel === "ingeleverd") return href.trim();
+    }
+}
+
+function resolveSameOriginHref(baseUrl: string, href: string): string | null {
+    try {
+        const base = new URL(baseUrl);
+        const origin = base.origin;
+        let resolved: URL;
+        if (/^https?:\/\//i.test(href)) {
+            resolved = new URL(href);
+        } else if (href.startsWith("/api/") || href.startsWith("/api?")) {
+            resolved = new URL(`${origin}${href}`);
+        } else if (href.startsWith("/")) {
+            resolved = new URL(`${origin}/api${href}`);
+        } else {
+            const prefix = base.href.endsWith("/") ? base.href : `${base.href}/`;
+            resolved = new URL(href, prefix);
+        }
+        if (resolved.origin !== origin) return null;
+        return resolved.toString();
+    } catch {
+        return null;
+    }
+}
+
+function isAssignmentBijlagePath(url: string): boolean {
+    return new URL(url).pathname.toLowerCase().includes("/opdrachten/bijlagen/");
+}
+
+function urlWithoutQuery(url: string): string {
+    const parsed = new URL(url);
+    parsed.search = "";
+    return parsed.toString();
 }
 
 function stripAngularFields<T>(value: T): T {
