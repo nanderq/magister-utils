@@ -15,6 +15,17 @@ const messageUrl = "https://school.magister.net/api/berichten/berichten/7/bijlag
 
 const originalFetch = globalThis.fetch;
 
+function withSettleWatchdog<T>(promise: Promise<T>, onExpire: () => void, ms = 1_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const watchdog = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      onExpire();
+      reject(new Error(`download did not settle within ${ms}ms`));
+    }, ms);
+  });
+  return Promise.race([promise, watchdog]).finally(() => clearTimeout(timer));
+}
+
 function expectBijlageRequest(actual: string, expected: string) {
   const actualUrl = new URL(actual);
   const expectedUrl = new URL(expected);
@@ -253,9 +264,21 @@ describe("downloadMagisterAttachment", () => {
   });
 
   test("stops a bijlage response whose body never ends", async () => {
+    let release = () => {};
     globalThis.fetch = (async (_input: string | URL | Request) => {
       const stream = new ReadableStream<Uint8Array>({
-        start() {},
+        start(controller) {
+          release = () => {
+            try {
+              controller.close();
+            } catch {
+              // already closed by cancel
+            }
+          };
+        },
+        cancel() {
+          release();
+        },
       });
       return new Response(stream, {
         status: 200,
@@ -264,14 +287,18 @@ describe("downloadMagisterAttachment", () => {
     }) as typeof fetch;
 
     const started = Date.now();
-    await expect(downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl, { timeoutMs: 200 }))
-      .rejects.toThrow(DOWNLOAD_TIMEOUT_PATTERN);
-    expect(Date.now() - started).toBeLessThan(5_000);
+    await expect(withSettleWatchdog(
+      downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl, { timeoutMs: 50 }),
+      () => release(),
+    )).rejects.toThrow(DOWNLOAD_TIMEOUT_PATTERN);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 
   test("stops when the bijlage request itself never settles", async () => {
+    let release = () => {};
     globalThis.fetch = ((_: string | URL | Request, init?: RequestInit) => new Promise((_resolve, reject) => {
       const fail = () => reject(Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }));
+      release = fail;
       if (init?.signal?.aborted) {
         fail();
         return;
@@ -280,9 +307,11 @@ describe("downloadMagisterAttachment", () => {
     })) as typeof fetch;
 
     const started = Date.now();
-    await expect(downloadMagisterAttachment(baseUrl, accessToken, messageUrl, { timeoutMs: 200 }))
-      .rejects.toThrow(DOWNLOAD_TIMEOUT_PATTERN);
-    expect(Date.now() - started).toBeLessThan(5_000);
+    await expect(withSettleWatchdog(
+      downloadMagisterAttachment(baseUrl, accessToken, messageUrl, { timeoutMs: 50 }),
+      () => release(),
+    )).rejects.toThrow(DOWNLOAD_TIMEOUT_PATTERN);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });
 

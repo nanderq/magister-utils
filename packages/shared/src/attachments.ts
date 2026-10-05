@@ -66,7 +66,10 @@ export async function downloadMagisterAttachment(
   }
 
   const tenantOrigin = new URL(baseUrl).origin;
-  const signal = AbortSignal.timeout(resolveTimeoutMs(options.timeoutMs));
+  // Own the timer. Bun 1.3 clears AbortSignal.timeout when its last listener
+  // is removed, so a later body read would wait forever after the headers arrive.
+  const deadline = startDeadline(resolveTimeoutMs(options.timeoutMs));
+  const signal = deadline.signal;
   // The bijlage route proxies file bytes unless this query is set. That proxy
   // stream does not end on the Vercel runtime, so the tool sits in SSE
   // keepalives until the function is killed. Magister's own client requests
@@ -116,13 +119,23 @@ export async function downloadMagisterAttachment(
         fileName,
       };
     }
+    throw new AttachmentDownloadError("Attachment download redirected too many times");
   } catch (error) {
     if (error instanceof AttachmentDownloadError) throw error;
     if (signal.aborted || isAbortError(error)) throw new AttachmentDownloadError(DOWNLOAD_TIMEOUT_MESSAGE);
     throw error;
+  } finally {
+    deadline.clear();
   }
+}
 
-  throw new AttachmentDownloadError("Attachment download redirected too many times");
+function startDeadline(timeoutMs: number): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timer),
+  };
 }
 
 function resolveTimeoutMs(timeoutMs: number | undefined): number {
@@ -331,8 +344,8 @@ function readChunk(
 ): Promise<{ done: boolean; value?: Uint8Array }> {
   return new Promise((resolve, reject) => {
     const onAbort = () => {
-      void reader.cancel().catch(() => undefined);
       reject(new AttachmentDownloadError(DOWNLOAD_TIMEOUT_MESSAGE));
+      void reader.cancel().catch(() => undefined);
     };
     if (signal.aborted) {
       onAbort();
@@ -383,7 +396,9 @@ async function readLimitedBytes(
 
   const reader = response.body.getReader();
   const onAbort = () => {
-    void reader.cancel().catch(() => undefined);
+    queueMicrotask(() => {
+      void reader.cancel().catch(() => undefined);
+    });
   };
   signal.addEventListener("abort", onAbort, { once: true });
   try {
