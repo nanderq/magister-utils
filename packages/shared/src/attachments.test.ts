@@ -7,12 +7,36 @@ import {
 } from "./attachments.ts";
 import { MagisterClient, type Tokens } from "./magister.ts";
 
+const DOWNLOAD_TIMEOUT_PATTERN = /Attachment download timed out before the file was received/;
 const baseUrl = "https://school.magister.net/api";
 const accessToken = "token";
 const studyGuideUrl = "https://school.magister.net/api/leerlingen/42/studiewijzers/13494/onderdelen/69587/bijlagen/99";
 const messageUrl = "https://school.magister.net/api/berichten/berichten/7/bijlagen/8";
 
 const originalFetch = globalThis.fetch;
+
+function withSettleWatchdog<T>(promise: Promise<T>, onExpire: () => void, ms = 1_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const watchdog = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      onExpire();
+      reject(new Error(`download did not settle within ${ms}ms`));
+    }, ms);
+  });
+  return Promise.race([promise, watchdog]).finally(() => clearTimeout(timer));
+}
+
+function expectBijlageRequest(actual: string, expected: string) {
+  const actualUrl = new URL(actual);
+  const expectedUrl = new URL(expected);
+  expect(actualUrl.origin).toBe(expectedUrl.origin);
+  expect(actualUrl.pathname).toBe(expectedUrl.pathname);
+  expect(actualUrl.searchParams.get("redirect_type")).toBe("body");
+  expect(actualUrl.searchParams.get("display")).toBe("attachment");
+  for (const [key, value] of expectedUrl.searchParams) {
+    expect(actualUrl.searchParams.get(key)).toBe(value);
+  }
+}
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -66,7 +90,7 @@ describe("downloadMagisterAttachment", () => {
     }) as typeof fetch;
 
     const file = await downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl);
-    expect(requested).toBe(studyGuideUrl);
+    expectBijlageRequest(requested, studyGuideUrl);
     expect(authorization).toBe("Bearer token");
     expect(file.kind).toBe("study_guide");
     expect(file.contentType).toBe("application/pdf");
@@ -109,10 +133,11 @@ describe("downloadMagisterAttachment", () => {
     const file = await downloadMagisterAttachment(baseUrl, accessToken, messageUrl);
     expect(file.kind).toBe("message");
     expect(file.bytes).toEqual(new Uint8Array([6]));
-    expect(requests).toEqual([
-      { url: messageUrl, authorization: "Bearer token" },
-      { url: studyGuideUrl, authorization: "Bearer token" },
-    ]);
+    expect(requests).toHaveLength(2);
+    expectBijlageRequest(requests[0].url, messageUrl);
+    expect(requests[0].authorization).toBe("Bearer token");
+    expectBijlageRequest(requests[1].url, studyGuideUrl);
+    expect(requests[1].authorization).toBe("Bearer token");
   });
 
   test("follows a public redirect without sending the Magister bearer token", async () => {
@@ -134,10 +159,10 @@ describe("downloadMagisterAttachment", () => {
 
     const file = await downloadMagisterAttachment(baseUrl, accessToken, messageUrl);
     expect(file.bytes).toEqual(new Uint8Array([5]));
-    expect(requests).toEqual([
-      { url: messageUrl, authorization: "Bearer token" },
-      { url: "https://files.example.net/blob/plan.pdf", authorization: "" },
-    ]);
+    expect(requests).toHaveLength(2);
+    expectBijlageRequest(requests[0].url, messageUrl);
+    expect(requests[0].authorization).toBe("Bearer token");
+    expect(requests[1]).toEqual({ url: "https://files.example.net/blob/plan.pdf", authorization: "" });
   });
 
   test("does not follow redirects off the bijlage API or onto local addresses", async () => {
@@ -152,7 +177,8 @@ describe("downloadMagisterAttachment", () => {
     await expect(downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl)).rejects.toThrow(
       "Attachment download redirected to an unsupported URL",
     );
-    expect(requested).toEqual([studyGuideUrl]);
+    expect(requested).toHaveLength(1);
+    expectBijlageRequest(requested[0], studyGuideUrl);
 
     requested.length = 0;
     globalThis.fetch = (async (input: string | URL | Request) => {
@@ -165,7 +191,8 @@ describe("downloadMagisterAttachment", () => {
     await expect(downloadMagisterAttachment(baseUrl, accessToken, messageUrl)).rejects.toThrow(
       "Attachment download redirected to an unsupported URL",
     );
-    expect(requested).toEqual([messageUrl]);
+    expect(requested).toHaveLength(1);
+    expectBijlageRequest(requested[0], messageUrl);
   });
 
   test("rejects disallowed URLs before fetching and surfaces upstream status", async () => {
@@ -187,6 +214,105 @@ describe("downloadMagisterAttachment", () => {
     })) as typeof fetch;
     await expect(downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl)).rejects.toThrow(/10 MiB/);
   });
+
+  test("downloads the file URL from a redirect_type=body location without the session bearer", async () => {
+    const requests: { url: string; authorization: string; accept: string }[] = [];
+    const fileUrl = "https://files.example.net/blob/Planning-LO.pdf?sig=1";
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      const headers = new Headers(init?.headers);
+      requests.push({
+        url,
+        authorization: headers.get("authorization") ?? "",
+        accept: headers.get("accept") ?? "",
+      });
+      if (requests.length === 1) {
+        return Response.json({ location: fileUrl });
+      }
+      return new Response(Uint8Array.from([4, 5, 6]), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": "attachment; filename=\"Planning-LO.pdf\"",
+        },
+      });
+    }) as typeof fetch;
+
+    const file = await downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl, {
+      fileName: "Planning-LO-H5-V6-26-27.pdf",
+    });
+    expect(file.bytes).toEqual(new Uint8Array([4, 5, 6]));
+    expect(file.fileName).toBe("Planning-LO.pdf");
+    expect(file.contentType).toBe("application/pdf");
+    expectBijlageRequest(requests[0].url, studyGuideUrl);
+    expect(requests[0].authorization).toBe("Bearer token");
+    expect(requests[0].accept).toContain("application/json");
+    expect(requests[1]).toEqual({ url: fileUrl, authorization: "", accept: "*/*" });
+  });
+
+  test("does not fetch a redirect location that points at a local address", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      requested.push(input instanceof Request ? input.url : input.toString());
+      return Response.json({ location: "http://127.0.0.1/secret" });
+    }) as typeof fetch;
+
+    await expect(downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl)).rejects.toThrow(
+      "Attachment download redirected to an unsupported URL",
+    );
+    expect(requested).toHaveLength(1);
+  });
+
+  test("stops a bijlage response whose body never ends", async () => {
+    let release = () => {};
+    globalThis.fetch = (async (_input: string | URL | Request) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          release = () => {
+            try {
+              controller.close();
+            } catch {
+              // already closed by cancel
+            }
+          };
+        },
+        cancel() {
+          release();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "application/pdf" },
+      });
+    }) as typeof fetch;
+
+    const started = Date.now();
+    await expect(withSettleWatchdog(
+      downloadMagisterAttachment(baseUrl, accessToken, studyGuideUrl, { timeoutMs: 50 }),
+      () => release(),
+    )).rejects.toThrow(DOWNLOAD_TIMEOUT_PATTERN);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  test("stops when the bijlage request itself never settles", async () => {
+    let release = () => {};
+    globalThis.fetch = ((_: string | URL | Request, init?: RequestInit) => new Promise((_resolve, reject) => {
+      const fail = () => reject(Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }));
+      release = fail;
+      if (init?.signal?.aborted) {
+        fail();
+        return;
+      }
+      init?.signal?.addEventListener("abort", fail, { once: true });
+    })) as typeof fetch;
+
+    const started = Date.now();
+    await expect(withSettleWatchdog(
+      downloadMagisterAttachment(baseUrl, accessToken, messageUrl, { timeoutMs: 50 }),
+      () => release(),
+    )).rejects.toThrow(DOWNLOAD_TIMEOUT_PATTERN);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
 });
 
 describe("MagisterClient.downloadAttachment", () => {
@@ -207,7 +333,7 @@ describe("MagisterClient.downloadAttachment", () => {
           id_token: "id-2",
         });
       }
-      if (url === messageUrl) {
+      if (new URL(url).pathname === new URL(messageUrl).pathname) {
         const authorization = new Headers(init?.headers).get("authorization") ?? "";
         authorizations.push(authorization);
         if (authorization === "Bearer old") return new Response(null, { status: 401 });

@@ -50,16 +50,21 @@ function success(data: Record<string, unknown>) {
 function toolError(error: unknown) {
   const known = error instanceof MagisterConnectionError;
   const status = error instanceof Error && "status" in error ? Number((error as Error & { status: number }).status) : undefined;
+  const timedOut = error instanceof Error
+    && error.name === "AttachmentDownloadError"
+    && /timed out/i.test(error.message);
   const code = known
     ? error.code
-    : status === 401
-      ? "MAGISTER_AUTH_EXPIRED"
-      : status
-        ? "MAGISTER_HTTP_ERROR"
-        : error instanceof z.ZodError || error instanceof Error && /must|cannot|invalid/i.test(error.message)
-          ? "INVALID_ARGUMENT"
-          : "INTERNAL_ERROR";
-  const message = known || code === "INVALID_ARGUMENT"
+    : timedOut
+      ? "UPSTREAM_TIMEOUT"
+      : status === 401
+        ? "MAGISTER_AUTH_EXPIRED"
+        : status
+          ? "MAGISTER_HTTP_ERROR"
+          : error instanceof z.ZodError || error instanceof Error && /must|cannot|invalid/i.test(error.message)
+            ? "INVALID_ARGUMENT"
+            : "INTERNAL_ERROR";
+  const message = known || code === "INVALID_ARGUMENT" || code === "UPSTREAM_TIMEOUT"
     ? error instanceof Error ? error.message : "Invalid input"
     : code === "MAGISTER_AUTH_EXPIRED"
       ? "The Magister session expired. Reconnect it in the dashboard."
