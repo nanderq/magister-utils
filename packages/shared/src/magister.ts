@@ -2,6 +2,12 @@ import { existsSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import {
+  downloadMagisterAttachment,
+  type DownloadedAttachment,
+  type DownloadAttachmentOptions,
+} from "./attachments.ts";
+
 declare const Bun: {
   file(path: string): { text(): Promise<string> };
   spawn(command: string[]): { exited: Promise<number> };
@@ -1755,6 +1761,27 @@ export class MagisterClient {
       `/berichten/berichten/${messageId}/bijlagen`,
     );
     return data.Items ?? data.items ?? [];
+  }
+
+  async downloadAttachment(
+    downloadUrl: string,
+    options: DownloadAttachmentOptions = {},
+  ): Promise<DownloadedAttachment> {
+    const attempt = async () => downloadMagisterAttachment(
+      await this.ensureBaseUrl(),
+      this.tokens.access_token,
+      downloadUrl,
+      options,
+    );
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!(error instanceof Error) || !("status" in error) || (error as { status?: number }).status !== 401) {
+        throw error;
+      }
+      await this.refreshTokens();
+      return attempt();
+    }
   }
 
   async getMessageWithAttachments(

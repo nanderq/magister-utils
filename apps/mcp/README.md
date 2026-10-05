@@ -23,3 +23,5 @@ Run migrations as an explicit release step. Configure a Vercel Firewall rate lim
 ## MCP authentication
 
 Clients send `Authorization: Bearer mag_mcp_...` to `/api/mcp`. OAuth-only MCP clients are not supported in this release.
+
+`download_attachment` proxies a study-guide or message `downloadUrl` through the connected Magister session and returns the file bytes. The MCP token authorizes this endpoint only; it does not authorize direct requests to Magister attachment URLs.
