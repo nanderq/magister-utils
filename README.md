@@ -80,7 +80,9 @@ The `apps/mcp` app is a Next.js demo dashboard with Google sign-in, then a Magis
 
 See the MCP [apps/mcp/README.md](apps/mcp/README.md) for env vars, local setup, and Vercel deploy. Vercel is the recommended deployment target. The MCP server is self-hosted: operators are responsible for their deployment, stored data, retention policy, and access controls.
 
-Tools: `get_account`, `get_schedule`, `get_grades`, `list_messages`, `get_message`, `list_assignments`, `get_assignment`, `list_study_guides`, `get_study_guide`.
+Tools: `get_account`, `get_schedule`, `get_grades`, `list_messages`, `get_message`, `list_assignments`, `get_assignment`, `list_study_guides`, `get_study_guide`, `download_attachment`.
+
+`download_attachment` fetches a study-guide or message attachment with the stored Magister session. Pass the `downloadUrl` from `get_study_guide` or `get_message`. Those URLs are Magister API paths and are not public; the tool returns the file bytes as base64 and as an embedded MCP resource. Files larger than 10 MiB are rejected.
 
 ## Development setup
 

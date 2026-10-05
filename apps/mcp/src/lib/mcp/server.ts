@@ -9,6 +9,8 @@ import {
   presentStudyGuideDetail,
 } from "@magister/shared/presenters";
 import { studyGuideFilesByPartId } from "@magister/shared/magister";
+import { Buffer } from "node:buffer";
+
 import { z } from "zod";
 
 import { createMagisterClient } from "@/lib/magister/repository";
@@ -147,7 +149,7 @@ export function registerMagisterTools(server: ToolServer) {
 
   server.registerTool("get_message", {
     title: "Get message",
-    description: "Return one inbox message and optionally its attachment metadata.",
+    description: "Return one inbox message and optionally its attachment metadata. Attachment downloadUrl values are Magister API paths; call download_attachment to fetch the file.",
     inputSchema: { id: z.number().int().positive(), includeAttachments: z.boolean().optional(), timeZone: timeZoneInput },
     annotations: { readOnlyHint: true },
   }, async ({ id, includeAttachments = false, timeZone }: { id: number; includeAttachments?: boolean; timeZone?: string }, extra: ToolExtra) => runTool("get_message", extra, async () => {
@@ -190,9 +192,52 @@ export function registerMagisterTools(server: ToolServer) {
     return { count: items.length, items: items.map(presentStudyGuide) };
   }));
 
+  server.registerTool("download_attachment", {
+    title: "Download attachment",
+    description: "Download a study-guide or message attachment using the connected Magister session. Pass the downloadUrl returned by get_study_guide or get_message. The response includes the file bytes as base64 and as an embedded resource. Files larger than 10 MiB are rejected.",
+    inputSchema: {
+      downloadUrl: z.string().trim().min(1).max(2048),
+      fileName: z.string().trim().min(1).max(255).optional(),
+    },
+    annotations: { readOnlyHint: true },
+  }, async ({ downloadUrl, fileName }: { downloadUrl: string; fileName?: string }, extra: ToolExtra) => {
+    const result = await runTool("download_attachment", extra, async () => {
+      const client = await createMagisterClient(getUserId(extra));
+      const file = await client.downloadAttachment(downloadUrl, { fileName });
+      return {
+        kind: file.kind,
+        name: file.fileName,
+        contentType: file.contentType,
+        sizeBytes: file.bytes.byteLength,
+        dataBase64: Buffer.from(file.bytes).toString("base64"),
+      };
+    });
+    if ("isError" in result && result.isError) return result;
+    const data = result.structuredContent as {
+      kind: string;
+      name: string | null;
+      contentType: string;
+      dataBase64: string;
+    };
+    return {
+      ...result,
+      content: [
+        {
+          type: "resource" as const,
+          resource: {
+            uri: `magister-attachment://${data.kind}/${encodeURIComponent(data.name ?? "attachment")}`,
+            mimeType: data.contentType,
+            blob: data.dataBase64,
+          },
+        },
+        ...result.content,
+      ],
+    };
+  });
+
   server.registerTool("get_study_guide", {
     title: "Get study guide",
-    description: "Return one study guide, its parts, and attachment metadata with download URLs.",
+    description: "Return one study guide, its parts, and attachment metadata. Attachment downloadUrl values are Magister API paths; call download_attachment to fetch the file.",
     inputSchema: { id: z.number().int().positive() },
     annotations: { readOnlyHint: true },
   }, async ({ id }: { id: number }, extra: ToolExtra) => runTool("get_study_guide", extra, async () => {

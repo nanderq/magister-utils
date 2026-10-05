@@ -6,7 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerMagisterTools } from "./server";
 
 describe("MCP server", () => {
-  test("advertises exactly the nine read-only tools", async () => {
+  test("advertises exactly the ten read-only tools", async () => {
     const server = new McpServer({ name: "test-magister", version: "1.0.0" });
     registerMagisterTools(server as unknown as import("./server").ToolServer);
     const client = new Client({ name: "test-client", version: "1.0.0" });
@@ -14,6 +14,7 @@ describe("MCP server", () => {
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
     const result = await client.listTools();
     expect(result.tools.map((tool) => tool.name).sort()).toEqual([
+      "download_attachment",
       "get_account",
       "get_assignment",
       "get_grades",
