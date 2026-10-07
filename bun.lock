@@ -21,6 +21,7 @@
       },
       "dependencies": {
         "@magister/shared": "workspace:*",
+        "magister-sdk": "workspace:*",
       },
     },
     "apps/mcp": {

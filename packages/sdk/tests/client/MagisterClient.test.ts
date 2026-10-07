@@ -102,6 +102,8 @@ describe("MagisterClient", () => {
         expect(client.account).toBeInstanceOf(Function);
         expect(client.schedule).toBeInstanceOf(Function);
         expect(client.appointment).toBeInstanceOf(Function);
+        expect(client.createAppointment).toBeInstanceOf(Function);
+        expect(client.deleteAppointment).toBeInstanceOf(Function);
         expect(client.assignmentUploadSettings).toBeInstanceOf(Function);
         expect(client.submitAssignment).toBeInstanceOf(Function);
         expect(client.assignmentVersion).toBeInstanceOf(Function);

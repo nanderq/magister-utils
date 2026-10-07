@@ -4,6 +4,8 @@ export type {
     AppointmentAttachment,
     AppointmentAttachmentLink,
     AppointmentDetail,
+    CreateAppointmentPayload,
+    CreatedAppointment,
     AssignmentDetail,
     AssignmentItem,
     AssignmentLink,
@@ -55,3 +57,6 @@ export type {
     UploadBody,
     UploadFileOptions,
 } from "./resources/messages";
+
+export { TokenStore } from "./auth/token-store";
+export { MagisterRequestError } from "./errors";

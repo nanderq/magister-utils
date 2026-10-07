@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "overrides": {
     "@hono/node-server": "1.19.15",
     "body-parser": "2.3.0",
@@ -27,7 +30,7 @@
     "mcli": "bun run apps/mcli/src/index.ts",
     "mtui": "bun run apps/mtui/src/index.tsx",
     "setup": "bun run apps/mcli/src/index.ts setup",
-    "test": "bun test packages/shared packages/sdk apps/mcp/src/lib",
+    "test": "bun test packages/shared packages/sdk apps/mcp/src/lib apps/mcli/src",
     "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd packages/sdk typecheck && bun run --cwd apps/mcli typecheck && bun run --cwd apps/mtui typecheck && bun run --cwd apps/mcp typecheck",
     "version:release": "bun scripts/update-release-package-versions.ts",
     "tui": "bun run apps/mtui/src/index.tsx"

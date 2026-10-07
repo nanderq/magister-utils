@@ -161,6 +161,24 @@ export interface AppointmentAttachment {
   [key: string]: unknown;
 }
 
+export interface CreateAppointmentPayload {
+  Start: string | Date;
+  Einde: string | Date;
+  Omschrijving: string;
+  Inhoud?: string;
+  Lokatie?: string;
+  DuurtHeleDag?: boolean;
+  Type?: number;
+  InfoType?: number;
+  Status?: number;
+  WeergaveType?: number;
+  Subtype?: number;
+}
+
+export interface CreatedAppointment {
+  id: number;
+}
+
 export interface AppointmentDetail {
   Id?: number;
   Omschrijving?: string;

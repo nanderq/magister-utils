@@ -22,7 +22,7 @@ import type {
     GetAssignmentVersionOptions,
     SubmitAssignmentInput,
 } from "../resources/assignments";
-import { getAppointment, getSchedule } from "../resources/schedule";
+import { createAppointment, deleteAppointment, getAppointment, getSchedule } from "../resources/schedule";
 import {
     getMessage,
     getMessageAttachments,
@@ -37,6 +37,8 @@ import { extractStudyGuideFiles, getStudyGuide, getStudyGuidePart, getStudyGuide
 import type {
     Account,
     AppointmentDetail,
+    CreateAppointmentPayload,
+    CreatedAppointment,
     AssignmentDetail,
     AssignmentItem,
     AssignmentUploadSettings,
@@ -61,7 +63,7 @@ import type {
 import { MagisterRequestError } from "../errors";
 
 class MagisterClient {
-    private readonly auth: AuthManager;
+    private auth: AuthManager;
 
     constructor(
         tenant: string,
@@ -70,6 +72,24 @@ class MagisterClient {
         tokenStore?: TokenStore,
     ) {
         this.auth = new AuthManager({ tenant, username, password, tokenStore });
+    }
+
+    /** Open an SDK token store without retaining a password. */
+    static async fromTokensFile(path?: string): Promise<MagisterClient> {
+        const store = new TokenStore({ path });
+        const stored = await Bun.file(store.path).json().catch((error: unknown) => {
+            if (!(error instanceof SyntaxError)) throw error;
+            throw new Error(`Invalid token file at ${store.path}. Run mcli setup.`);
+        });
+        if (typeof stored?.account?.tenant !== "string" || typeof stored?.account?.username !== "string") {
+            throw new Error("Token file is missing SDK account metadata. Run mcli setup.");
+        }
+        await store.read(stored.account);
+        const client = Object.create(MagisterClient.prototype) as MagisterClient;
+        client.auth = new AuthManager({
+            ...stored.account, password: "", tokenOnly: true, tokenStore: store,
+        });
+        return client;
     }
 
     async login(): Promise<Session> {
@@ -150,6 +170,19 @@ class MagisterClient {
     async appointment(personId: number, appointmentId: number): Promise<AppointmentDetail> {
         return this.withSession((session) =>
             getAppointment(session.baseUrl, session.accessToken, personId, appointmentId));
+    }
+
+    async createAppointment(
+        personId: number,
+        payload: CreateAppointmentPayload,
+    ): Promise<CreatedAppointment> {
+        return this.withSession((session) =>
+            createAppointment(session.baseUrl, session.accessToken, personId, payload));
+    }
+
+    async deleteAppointment(personId: number, appointmentId: number): Promise<void> {
+        return this.withSession((session) =>
+            deleteAppointment(session.baseUrl, session.accessToken, personId, appointmentId));
     }
 
     async assignments(

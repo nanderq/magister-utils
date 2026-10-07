@@ -43,9 +43,9 @@ On Windows, run:
 .\mcli.exe setup
 ```
 
-Setup walks through school URL, username, and password, then writes tokens to `~/.config/magister/shared-tokens.json` (or `%USERPROFILE%\.config\magister\shared-tokens.json` on Windows). That legacy shared-package file is used by `mcli`, `mtui`, and `mcp`. Override the path with `MAGISTER_TOKENS_FILE` if you need to.
+CLI setup uses `magister-sdk` and saves tokens to `~/.config/magister/tokens.json`. Override this with `MAGISTER_TOKENS_FILE`. Run `mcli setup` once when upgrading from the legacy CLI: old snake_case token files are incompatible with the SDK. The CLI does not search the working directory for tokens.
 
-A leftover `tokens.json` in the working directory is still picked up as a fallback. Prefer the global file.
+The TUI and MCP still use the legacy shared-package token format and their own setup flows, normally at `~/.config/magister/shared-tokens.json`. Keep their token file separate from the SDK file.
 
 ## CLI
 
@@ -64,7 +64,23 @@ A leftover `tokens.json` in the working directory is still picked up as a fallba
 ./mcli study-guide 111
 ```
 
-Dates accept `today`, `tomorrow`, or `YYYY-MM-DD`. Errors also come back as JSON with a non-zero exit code.
+Dates accept `today`, `tomorrow`, or valid `YYYY-MM-DD` values; relative dates use the system timezone. Responses use `{ok:true,command,data}`; errors use `{ok:false,command,error:{code,message}}` and exit 1. `setup` is the interactive exception.
+
+`mcli capabilities` is the authoritative command/flag manifest, generated from the command definitions. It includes session controls, enrollments, appointment details, all grade filters, contact search, file upload, sending messages, message attachments, study-guide parts, and file discovery. Read commands that simplify SDK fields support `--raw` to retain every field. Person-scoped commands accept `--person-id` and otherwise use the account's person ID.
+
+```bash
+./mcli session
+./mcli enrollments --latest
+./mcli appointment 12345
+./mcli grades --active-periods --pta-only --raw
+./mcli contacts --query "Teacher name"
+./mcli study-guide-part 111 222
+./mcli study-guide-files 111 222
+```
+
+For headless login, supply `MAGISTER_TENANT`, `MAGISTER_USERNAME`, and `MAGISTER_PASSWORD` through the environment and run `mcli login`. Subsequent commands use saved tokens without a password. `mcli logout` deletes the selected local token file.
+
+The agent skill is in [`skills/magister-mcli/SKILL.md`](skills/magister-mcli/SKILL.md). Copy the `skills/magister-mcli` directory into your agent's skills directory (for Codex, `~/.codex/skills/`). It includes pagination, full-data reads, authentication recovery, and message composition with recipient lookup and attachments.
 
 ## Terminal UI
 
@@ -136,7 +152,7 @@ Tagged releases are built for Linux, macOS, and Windows. They contain only the `
 
 ## Tokens
 
-Treat token files like passwords. Rotating Magister credentials or wiping `~/.config/magister/shared-tokens.json` means running `mcli setup` again (or `bun run setup` in a development checkout).
+Treat token files like passwords. After deleting the CLI SDK token file, run `mcli setup` again (or `bun run setup` in a development checkout).
 
 ## Disclaimer
 

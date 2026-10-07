@@ -1,4 +1,4 @@
-import { MagisterClient } from "magister-sdk";
+import { MagisterClient, MagisterRequestError } from "magister-sdk";
 
 function log(level: "info" | "warning" | "error", message: string) {
     console.log(`[${new Date().toISOString()}] [${level}] ${message}`);
@@ -12,12 +12,14 @@ const tenant = process.env.MAGISTER_TENANT;
 const username = process.env.MAGISTER_USERNAME;
 const password = process.env.MAGISTER_PASSWORD;
 
-if (!tenant || !username || !password) {
+if ((tenant || username || password) && (!tenant || !username || !password)) {
     throw new Error("Set MAGISTER_TENANT, MAGISTER_USERNAME, and MAGISTER_PASSWORD");
 }
 
 log("info", "Starting Magister SDK debug");
-const client = new MagisterClient(tenant, username, password);
+const client = tenant && username && password
+    ? new MagisterClient(tenant, username, password)
+    : await MagisterClient.fromTokensFile();
 
 log("info", "Checking for a stored session");
 log("info", `Stored session available: ${await client.hasSession()}`);
@@ -105,4 +107,41 @@ if (studyGuideWithId?.Id) {
     log("warning", "No study guide was available for detail checks");
 }
 
-log("info", "All non-destructive SDK debug checks passed");
+log("info", "Creating a personal appointment");
+const start = new Date(Date.now() + 60 * 60 * 1000);
+const end = new Date(start.getTime() + 30 * 60 * 1000);
+const created = await client.createAppointment(account.Persoon.Id, {
+    Start: start,
+    Einde: end,
+    Omschrijving: "SDK debug",
+    Inhoud: "Temporary appointment created by packages/sdk/debug.ts",
+    Lokatie: "debug",
+});
+check(created.id > 0, "createAppointment() returned no appointment id");
+log("info", `Created appointment ${created.id}`);
+
+try {
+    log("info", "Reading the created appointment");
+    const appointment = await client.appointment(account.Persoon.Id, created.id);
+    check(appointment.Id === created.id, "appointment() did not return the created appointment");
+    check(appointment.Omschrijving === "SDK debug", "created appointment has another description");
+    log("info", "Created appointment retrieved successfully");
+} finally {
+    log("info", `Deleting appointment ${created.id}`);
+    await client.deleteAppointment(account.Persoon.Id, created.id);
+    log("info", "Created appointment deleted");
+}
+
+log("info", "Confirming the appointment is gone");
+let stillReadable = false;
+try {
+    await client.appointment(account.Persoon.Id, created.id);
+    stillReadable = true;
+} catch (error) {
+    if (!(error instanceof MagisterRequestError)) throw error;
+    log("info", `Deleted appointment request returned ${error.status}`);
+    check(error.status === 404, `deleted appointment request returned ${error.status}`);
+}
+check(!stillReadable, "deleted appointment was still readable");
+
+log("info", "All SDK debug checks passed");
