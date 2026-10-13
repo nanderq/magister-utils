@@ -15,6 +15,7 @@
   "dependencies": {
     "@magister/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/server": "^2",
     "@neondatabase/serverless": "^1.0.2",
     "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
