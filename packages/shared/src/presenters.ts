@@ -86,7 +86,12 @@ export function presentAssignment(item: AssignmentItem) {
   };
 }
 
-export function presentAssignmentDetail(item: AssignmentDetail) {
+// Accepts the SDK and shared detail shapes: only the fields read below are required.
+export function presentAssignmentDetail(
+  item: AssignmentItem & Pick<AssignmentDetail, "Omschrijving"> & {
+    Bijlagen?: Pick<NonNullable<AssignmentDetail["Bijlagen"]>[number], "Id" | "Naam" | "ContentType" | "Grootte">[];
+  },
+) {
   return {
     ...presentAssignment(item),
     description: htmlToText(item.Omschrijving) || null,
