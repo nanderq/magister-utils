@@ -4,8 +4,16 @@ export type {
     AppointmentAttachment,
     AppointmentAttachmentLink,
     AppointmentDetail,
+    CreateAppointmentPayload,
+    CreatedAppointment,
     AssignmentDetail,
     AssignmentItem,
+    AssignmentLink,
+    AssignmentUploadSettings,
+    AssignmentVersion,
+    AssignmentVersionAttachment,
+    ParsedVersieNavigatieItem,
+    VersieNavigatieItem,
     Contact,
     Enrollment,
     GradeColumn,
@@ -30,8 +38,25 @@ export type {
     UploadedAttachment,
 } from "./types";
 export type {
+    AssignmentSubmissionFile,
+    CreateAssignmentVersionInput,
+    GetAssignmentVersionOptions,
+    SubmitAssignmentInput,
+} from "./resources/assignments";
+export {
+    buildAssignmentVersionDraft,
+    listSubmittedAssignmentFiles,
+    parseVersieNavigatieItems,
+    resolveAssignmentAttachmentDownloadUrl,
+    resolveAssignmentContentsDownloadUrl,
+    resolveAssignmentIngeleverdDownloadUrl,
+} from "./resources/assignments";
+export type {
     GetMessagesOptions,
     SearchContactsOptions,
     UploadBody,
     UploadFileOptions,
 } from "./resources/messages";
+
+export { TokenStore } from "./auth/token-store";
+export { MagisterRequestError } from "./errors";

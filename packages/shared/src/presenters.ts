@@ -7,6 +7,7 @@ import type {
   MessageItem,
   ScheduleItem,
   StudyGuideDetail,
+  StudyGuideFile,
   StudyGuideItem,
 } from "./magister.ts";
 import { htmlToText } from "./magister.ts";
@@ -85,7 +86,12 @@ export function presentAssignment(item: AssignmentItem) {
   };
 }
 
-export function presentAssignmentDetail(item: AssignmentDetail) {
+// Accepts the SDK and shared detail shapes: only the fields read below are required.
+export function presentAssignmentDetail(
+  item: AssignmentItem & Pick<AssignmentDetail, "Omschrijving"> & {
+    Bijlagen?: Pick<NonNullable<AssignmentDetail["Bijlagen"]>[number], "Id" | "Naam" | "ContentType" | "Grootte">[];
+  },
+) {
   return {
     ...presentAssignment(item),
     description: htmlToText(item.Omschrijving) || null,
@@ -108,7 +114,31 @@ export function presentStudyGuide(item: StudyGuideItem) {
   };
 }
 
-export function presentStudyGuideDetail(item: StudyGuideDetail) {
+export function presentStudyGuideAttachment(file: StudyGuideFile) {
+  const numericId = file.fileId ?? (/^\d+$/.test(file.id) ? Number(file.id) : null);
+  return {
+    id: numericId ?? file.id ?? null,
+    name: file.name || null,
+    contentType: file.contentType ?? null,
+    sizeBytes: file.size ?? null,
+    downloadUrl: file.href ?? null,
+  };
+}
+
+function filesForStudyGuidePart(
+  filesByPartId: ReadonlyMap<number, StudyGuideFile[]> | Record<string | number, StudyGuideFile[]>,
+  partId: number | undefined,
+): StudyGuideFile[] {
+  if (partId == null) return [];
+  if (filesByPartId instanceof Map) return filesByPartId.get(partId) ?? [];
+  const record = filesByPartId as Record<string | number, StudyGuideFile[] | undefined>;
+  return record[partId] ?? record[String(partId)] ?? [];
+}
+
+export function presentStudyGuideDetail(
+  item: StudyGuideDetail,
+  filesByPartId: ReadonlyMap<number, StudyGuideFile[]> | Record<string | number, StudyGuideFile[]> = {},
+) {
   const parts = item.Onderdelen?.Items ?? item.Onderdelen?.items ?? [];
   return {
     id: item.Id ?? null,
@@ -120,6 +150,7 @@ export function presentStudyGuideDetail(item: StudyGuideDetail) {
       title: part.Titel ?? null,
       description: htmlToText(part.Omschrijving) || null,
       order: part.Volgnummer ?? null,
+      attachments: filesForStudyGuidePart(filesByPartId, part.Id).map(presentStudyGuideAttachment),
     })),
   };
 }

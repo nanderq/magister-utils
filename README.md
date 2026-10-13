@@ -19,7 +19,7 @@ packages/sdk       New standalone TypeScript SDK
 > [!WARNING]
 > `magister-sdk` is a very early work in progress. Its API, types, authentication flow, and storage format may change without notice. It is not published for production use yet.
 
-The new SDK is a cleaner, typed Magister client intended for direct use in TypeScript applications. It currently covers authentication, accounts, enrollments, schedules, grades, messages, assignments, and study guides, including message composition and file uploads.
+The new SDK is a cleaner, typed Magister client intended for direct use in TypeScript applications. It currently covers authentication, accounts, enrollments, schedules, grades, messages, assignments, and study guides, including message composition, file uploads, and assignment turn-in.
 
 See the [SDK README](packages/sdk/README.md) for setup, examples, the complete method reference, and current limitations.
 
@@ -43,9 +43,9 @@ On Windows, run:
 .\mcli.exe setup
 ```
 
-Setup walks through school URL, username, and password, then writes tokens to `~/.config/magister/shared-tokens.json` (or `%USERPROFILE%\.config\magister\shared-tokens.json` on Windows). That legacy shared-package file is used by `mcli`, `mtui`, and `mcp`. Override the path with `MAGISTER_TOKENS_FILE` if you need to.
+CLI setup uses `magister-sdk` and saves tokens to `~/.config/magister/tokens.json`. Override this with `MAGISTER_TOKENS_FILE`. Run `mcli setup` once when upgrading from the legacy CLI: old snake_case token files are incompatible with the SDK. The CLI does not search the working directory for tokens.
 
-A leftover `tokens.json` in the working directory is still picked up as a fallback. Prefer the global file.
+The TUI and MCP still use the legacy shared-package token format and their own setup flows, normally at `~/.config/magister/shared-tokens.json`. Keep their token file separate from the SDK file.
 
 ## CLI
 
@@ -64,7 +64,23 @@ A leftover `tokens.json` in the working directory is still picked up as a fallba
 ./mcli study-guide 111
 ```
 
-Dates accept `today`, `tomorrow`, or `YYYY-MM-DD`. Errors also come back as JSON with a non-zero exit code.
+Dates accept `today`, `tomorrow`, or valid `YYYY-MM-DD` values; relative dates use the system timezone. Responses use `{ok:true,command,data}`; errors use `{ok:false,command,error:{code,message}}` and exit 1. `setup` is the interactive exception.
+
+`mcli capabilities` is the authoritative command/flag manifest, generated from the command definitions. It includes session controls, enrollments, appointment details, all grade filters, contact search, file upload, sending messages, message attachments, study-guide parts, and file discovery. Read commands that simplify SDK fields support `--raw` to retain every field. Person-scoped commands accept `--person-id` and otherwise use the account's person ID.
+
+```bash
+./mcli session
+./mcli enrollments --latest
+./mcli appointment 12345
+./mcli grades --active-periods --pta-only --raw
+./mcli contacts --query "Teacher name"
+./mcli study-guide-part 111 222
+./mcli study-guide-files 111 222
+```
+
+For headless login, supply `MAGISTER_TENANT`, `MAGISTER_USERNAME`, and `MAGISTER_PASSWORD` through the environment and run `mcli login`. Subsequent commands use saved tokens without a password. `mcli logout` deletes the selected local token file.
+
+The agent skill is in [`skills/magister-mcli/SKILL.md`](skills/magister-mcli/SKILL.md). Copy the `skills/magister-mcli` directory into your agent's skills directory (for Codex, `~/.codex/skills/`). It includes pagination, full-data reads, authentication recovery, and message composition with recipient lookup and attachments.
 
 ## Terminal UI
 
@@ -80,7 +96,9 @@ The `apps/mcp` app is a Next.js demo dashboard with Google sign-in, then a Magis
 
 See the MCP [apps/mcp/README.md](apps/mcp/README.md) for env vars, local setup, and Vercel deploy. Vercel is the recommended deployment target. The MCP server is self-hosted: operators are responsible for their deployment, stored data, retention policy, and access controls.
 
-Tools: `get_account`, `get_schedule`, `get_grades`, `list_messages`, `get_message`, `list_assignments`, `get_assignment`, `list_study_guides`, `get_study_guide`.
+Tools: `get_account`, `get_schedule`, `get_grades`, `list_messages`, `get_message`, `list_assignments`, `get_assignment`, `list_study_guides`, `get_study_guide`, `download_attachment`.
+
+`download_attachment` fetches a study-guide or message attachment with the stored Magister session. Pass the `downloadUrl` from `get_study_guide` or `get_message`. Those URLs are Magister API paths and are not public; the tool returns the file bytes as base64 and as an embedded MCP resource. Files larger than 10 MiB are rejected.
 
 ## Development setup
 
@@ -134,7 +152,7 @@ Tagged releases are built for Linux, macOS, and Windows. They contain only the `
 
 ## Tokens
 
-Treat token files like passwords. Rotating Magister credentials or wiping `~/.config/magister/shared-tokens.json` means running `mcli setup` again (or `bun run setup` in a development checkout).
+Treat token files like passwords. After deleting the CLI SDK token file, run `mcli setup` again (or `bun run setup` in a development checkout).
 
 ## Disclaimer
 

@@ -14,6 +14,7 @@ export interface AuthManagerOptions {
     username: string;
     password: string;
     authCode?: string;
+    tokenOnly?: boolean;
     tokenStore?: TokenStore;
 }
 
@@ -43,7 +44,7 @@ export class AuthManager {
         this.tokenStore = options.tokenStore ?? new TokenStore();
 
         if (!this.username) throw new Error("Username is required");
-        if (!this.password) throw new Error("Password is required");
+        if (!this.password && !options.tokenOnly) throw new Error("Password is required");
     }
 
     async login(): Promise<Session> {
@@ -56,6 +57,7 @@ export class AuthManager {
     }
 
     private async performLogin(): Promise<Session> {
+        if (!this.password) throw new Error("Login requires credentials. Run mcli setup.");
         this.clearSession();
         const { code, codeVerifier } = await this.getAuthorizationCode();
         const tokens = await this.fetchTokens(code, codeVerifier);

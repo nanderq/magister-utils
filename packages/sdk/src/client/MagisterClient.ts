@@ -2,8 +2,27 @@ import { AuthManager } from "../auth/AuthManager";
 import { TokenStore } from "../auth/token-store";
 import { getAccount, getEnrollments } from "../resources/account";
 import { getGrades } from "../resources/grades";
-import { getAssignment, getAssignments } from "../resources/assignments";
-import { getAppointment, getSchedule } from "../resources/schedule";
+import {
+    createAssignmentDraft,
+    createAssignmentVersion,
+    downloadAssignmentAttachment,
+    getAssignment,
+    getAssignmentUploadSettings,
+    getAssignments,
+    getAssignmentVersion,
+    getAssignmentVersionByHref,
+    listSubmittedAssignmentFiles,
+    resolveAssignmentContentsDownloadUrl,
+    resolveAssignmentIngeleverdDownloadUrl,
+    submitAssignment,
+    updateAssignmentVersion,
+} from "../resources/assignments";
+import type {
+    CreateAssignmentVersionInput,
+    GetAssignmentVersionOptions,
+    SubmitAssignmentInput,
+} from "../resources/assignments";
+import { createAppointment, deleteAppointment, getAppointment, getSchedule } from "../resources/schedule";
 import {
     getMessage,
     getMessageAttachments,
@@ -18,8 +37,13 @@ import { extractStudyGuideFiles, getStudyGuide, getStudyGuidePart, getStudyGuide
 import type {
     Account,
     AppointmentDetail,
+    CreateAppointmentPayload,
+    CreatedAppointment,
     AssignmentDetail,
     AssignmentItem,
+    AssignmentUploadSettings,
+    AssignmentVersion,
+    AssignmentVersionAttachment,
     Enrollment,
     GradeItem,
     ScheduleItem,
@@ -39,7 +63,7 @@ import type {
 import { MagisterRequestError } from "../errors";
 
 class MagisterClient {
-    private readonly auth: AuthManager;
+    private auth: AuthManager;
 
     constructor(
         tenant: string,
@@ -48,6 +72,24 @@ class MagisterClient {
         tokenStore?: TokenStore,
     ) {
         this.auth = new AuthManager({ tenant, username, password, tokenStore });
+    }
+
+    /** Open an SDK token store without retaining a password. */
+    static async fromTokensFile(path?: string): Promise<MagisterClient> {
+        const store = new TokenStore({ path });
+        const stored = await Bun.file(store.path).json().catch((error: unknown) => {
+            if (!(error instanceof SyntaxError)) throw error;
+            throw new Error(`Invalid token file at ${store.path}. Run mcli setup.`);
+        });
+        if (typeof stored?.account?.tenant !== "string" || typeof stored?.account?.username !== "string") {
+            throw new Error("Token file is missing SDK account metadata. Run mcli setup.");
+        }
+        await store.read(stored.account);
+        const client = Object.create(MagisterClient.prototype) as MagisterClient;
+        client.auth = new AuthManager({
+            ...stored.account, password: "", tokenOnly: true, tokenStore: store,
+        });
+        return client;
     }
 
     async login(): Promise<Session> {
@@ -130,6 +172,19 @@ class MagisterClient {
             getAppointment(session.baseUrl, session.accessToken, personId, appointmentId));
     }
 
+    async createAppointment(
+        personId: number,
+        payload: CreateAppointmentPayload,
+    ): Promise<CreatedAppointment> {
+        return this.withSession((session) =>
+            createAppointment(session.baseUrl, session.accessToken, personId, payload));
+    }
+
+    async deleteAppointment(personId: number, appointmentId: number): Promise<void> {
+        return this.withSession((session) =>
+            deleteAppointment(session.baseUrl, session.accessToken, personId, appointmentId));
+    }
+
     async assignments(
         personId: number,
         options: { skip?: number; top?: number } = {},
@@ -141,6 +196,89 @@ class MagisterClient {
     async assignment(personId: number, assignmentId: number): Promise<AssignmentDetail> {
         return this.withSession((session) =>
             getAssignment(session.baseUrl, session.accessToken, personId, assignmentId));
+    }
+
+    async assignmentUploadSettings(personId: number): Promise<AssignmentUploadSettings> {
+        return this.withSession((session) =>
+            getAssignmentUploadSettings(session.baseUrl, session.accessToken, personId));
+    }
+
+    async submitAssignment(
+        personId: number,
+        assignmentId: number,
+        input: SubmitAssignmentInput,
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            submitAssignment(session.baseUrl, session.accessToken, personId, assignmentId, input));
+    }
+
+    async assignmentVersion(
+        personId: number,
+        versionId: number,
+        options: GetAssignmentVersionOptions = {},
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            getAssignmentVersion(session.baseUrl, session.accessToken, personId, versionId, options));
+    }
+
+    async assignmentVersionByHref(href: string): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            getAssignmentVersionByHref(session.baseUrl, session.accessToken, href));
+    }
+
+    async createAssignmentDraft(
+        personId: number,
+        assignmentId: number,
+        input: CreateAssignmentVersionInput = {},
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            createAssignmentDraft(session.baseUrl, session.accessToken, personId, assignmentId, input));
+    }
+
+    async createAssignmentVersion(
+        personId: number,
+        assignmentId: number,
+        version: AssignmentVersion,
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            createAssignmentVersion(session.baseUrl, session.accessToken, personId, assignmentId, version));
+    }
+
+    async updateAssignmentVersion(
+        personId: number,
+        assignmentId: number,
+        version: AssignmentVersion,
+    ): Promise<AssignmentVersion> {
+        return this.withSession((session) =>
+            updateAssignmentVersion(session.baseUrl, session.accessToken, personId, assignmentId, version));
+    }
+
+    async assignmentContentsDownloadUrl(
+        attachment: AssignmentVersionAttachment,
+    ): Promise<string | null> {
+        return this.withSession(async (session) =>
+            resolveAssignmentContentsDownloadUrl(session.baseUrl, attachment));
+    }
+
+    async assignmentIngeleverdDownloadUrl(
+        personId: number,
+        attachment: AssignmentVersionAttachment,
+    ): Promise<string | null> {
+        return this.withSession(async (session) =>
+            resolveAssignmentIngeleverdDownloadUrl(session.baseUrl, attachment, personId));
+    }
+
+    async submittedAssignmentFiles(
+        personId: number,
+        version: AssignmentVersion,
+    ): Promise<{ attachment: AssignmentVersionAttachment; downloadUrl: string | null }[]> {
+        return this.withSession(async (session) =>
+            listSubmittedAssignmentFiles(session.baseUrl, version, personId));
+    }
+
+    async downloadAssignmentAttachment(downloadUrl: string): Promise<Uint8Array> {
+        return this.withSession((session) =>
+            downloadAssignmentAttachment(session.baseUrl, session.accessToken, downloadUrl));
     }
 
     async messages(options: GetMessagesOptions = {}): Promise<MessageItem[]> {

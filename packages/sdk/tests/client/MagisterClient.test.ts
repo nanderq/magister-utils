@@ -102,6 +102,17 @@ describe("MagisterClient", () => {
         expect(client.account).toBeInstanceOf(Function);
         expect(client.schedule).toBeInstanceOf(Function);
         expect(client.appointment).toBeInstanceOf(Function);
+        expect(client.createAppointment).toBeInstanceOf(Function);
+        expect(client.deleteAppointment).toBeInstanceOf(Function);
+        expect(client.assignmentUploadSettings).toBeInstanceOf(Function);
+        expect(client.submitAssignment).toBeInstanceOf(Function);
+        expect(client.assignmentVersion).toBeInstanceOf(Function);
+        expect(client.assignmentVersionByHref).toBeInstanceOf(Function);
+        expect(client.createAssignmentDraft).toBeInstanceOf(Function);
+        expect(client.createAssignmentVersion).toBeInstanceOf(Function);
+        expect(client.updateAssignmentVersion).toBeInstanceOf(Function);
+        expect(client.submittedAssignmentFiles).toBeInstanceOf(Function);
+        expect(client.downloadAssignmentAttachment).toBeInstanceOf(Function);
     });
 
     test("session() restores a stored session", async () => {

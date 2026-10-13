@@ -161,6 +161,24 @@ export interface AppointmentAttachment {
   [key: string]: unknown;
 }
 
+export interface CreateAppointmentPayload {
+  Start: string | Date;
+  Einde: string | Date;
+  Omschrijving: string;
+  Inhoud?: string;
+  Lokatie?: string;
+  DuurtHeleDag?: boolean;
+  Type?: number;
+  InfoType?: number;
+  Status?: number;
+  WeergaveType?: number;
+  Subtype?: number;
+}
+
+export interface CreatedAppointment {
+  id: number;
+}
+
 export interface AppointmentDetail {
   Id?: number;
   Omschrijving?: string;
@@ -179,15 +197,85 @@ export interface AppointmentDetail {
   [key: string]: unknown;
 }
 
+export interface AssignmentLink {
+  Rel?: string;
+  rel?: string;
+  Href?: string;
+  href?: string;
+  [key: string]: unknown;
+}
+
+/** One entry from assignment detail `VersieNavigatieItems`. `Omschrijving` is the version number as text. */
+export interface VersieNavigatieItem {
+  Id?: number;
+  Omschrijving?: string | null;
+  Links?: AssignmentLink[] | null;
+  [key: string]: unknown;
+}
+
+export interface ParsedVersieNavigatieItem {
+  id: number;
+  omschrijving: string;
+  selfHref?: string;
+  prevHref?: string;
+  nextHref?: string;
+}
+
 export interface AssignmentDetail extends AssignmentItem {
   Omschrijving?: string | null;
-  Bijlagen?: {
-    Id?: number;
-    Naam?: string;
-    ContentType?: string;
-    Grootte?: number;
-    [key: string]: unknown;
-  }[];
+  Vak?: string | null;
+  LaatsteOpdrachtVersienummer?: number | null;
+  VersieNavigatieItems?: VersieNavigatieItem[] | null;
+  Links?: AssignmentLink[] | null;
+  Bijlagen?: AssignmentVersionAttachment[];
+}
+
+export interface AssignmentUploadSettings {
+  MyDiskQuota?: number;
+  MaxUploadFileSize?: number;
+  BlacklistedExtensions?: string;
+  SharedDiskQuota?: number;
+  MySpaceUsed?: number;
+  [key: string]: unknown;
+}
+
+export interface AssignmentVersionAttachment {
+  Id?: number;
+  Naam?: string;
+  ContentType?: string;
+  Status?: number;
+  Datum?: string | null;
+  Grootte?: number;
+  Url?: string | null;
+  UniqueId?: string;
+  BronSoort?: number;
+  /**
+   * Teacher files use Rel `Contents`. Files the student turned in use Rel `Self`
+   * with an `/opdrachten/bijlagen/Ingeleverd/{id}` href.
+   */
+  Links?: AssignmentLink[] | null;
+  [key: string]: unknown;
+}
+
+export interface AssignmentVersion {
+  Id?: number;
+  Links?: unknown;
+  Titel?: string | null;
+  Vak?: string | null;
+  Status?: number;
+  OpdrachtId?: number;
+  LeerlingOpmerking?: string | null;
+  DocentOpmerking?: string | null;
+  LeerlingBijlagen?: AssignmentVersionAttachment[];
+  FeedbackBijlagen?: AssignmentVersionAttachment[] | null;
+  GestartOp?: string | null;
+  InleverenVoor?: string | null;
+  IngeleverdOp?: string | null;
+  Beoordeling?: string | null;
+  BeoordeeldOp?: string | null;
+  VersieNummer?: number;
+  IsTeLaat?: boolean;
+  [key: string]: unknown;
 }
 
 export interface StudyGuideItem {
