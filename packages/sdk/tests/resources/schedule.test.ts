@@ -236,7 +236,7 @@ describe("schedule", () => {
                 status: 201,
                 headers: { Location: "/api/personen/123/afspraken/7/?ignored=1#fragment" },
             },
-        )) as typeof fetch;
+        )) as unknown as typeof fetch;
 
         await expect(createAppointment(
             "https://school.magister.net/api",
@@ -254,7 +254,7 @@ describe("schedule", () => {
         globalThis.fetch = (async () => Response.json(
             { Id: 42 },
             { status: 201 },
-        )) as typeof fetch;
+        )) as unknown as typeof fetch;
 
         await expect(createAppointment(
             "https://school.magister.net/api",
@@ -272,7 +272,7 @@ describe("schedule", () => {
         globalThis.fetch = (async () => Response.json(
             { id: 42 },
             { status: 201 },
-        )) as typeof fetch;
+        )) as unknown as typeof fetch;
 
         await expect(createAppointment(
             "https://school.magister.net/api",
@@ -293,7 +293,7 @@ describe("schedule", () => {
                 status: 201,
                 headers: { Location: "/api/personen/123/afspraken" },
             },
-        )) as typeof fetch;
+        )) as unknown as typeof fetch;
 
         await expect(createAppointment(
             "https://school.magister.net/api",
