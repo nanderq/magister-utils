@@ -1,16 +1,35 @@
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { AuthInfo, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 
-import { registerMagisterTools } from "@/lib/mcp/server";
+import { registerMagisterTools, type ToolServer } from "@/lib/mcp/server";
 import { authenticateApiKey } from "@/lib/security/api-key-repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// registerMagisterTools reads the tool context as { authInfo, requestInfo }. mcp-handler 2.x
+// passes its own context object as the last callback argument, so map it to that shape here.
+function withToolExtra(server: McpServer): ToolServer {
+  return {
+    registerTool: (name, config, callback) => (server.registerTool as (...args: unknown[]) => unknown)(
+      name,
+      config,
+      (...args: unknown[]) => {
+        const ctx = args[args.length - 1] as ServerContext;
+        const extra = {
+          authInfo: ctx.http?.authInfo,
+          requestInfo: { headers: Object.fromEntries(ctx.http?.req?.headers ?? []) },
+        };
+        return (callback as (...cbArgs: unknown[]) => unknown)(...args.slice(0, -1), extra);
+      },
+    ),
+  };
+}
 
 const mcpHandler = createMcpHandler(
-  (server) => registerMagisterTools(server as unknown as import("@/lib/mcp/server").ToolServer),
-  { serverInfo: { name: "magister-mcp", version: "0.1.0-alpha.1" } },
-  { basePath: "/api", maxDuration: 60, disableSse: true, verboseLogs: false },
+  (server) => registerMagisterTools(withToolExtra(server)),
+  { serverInfo: { name: "magister-mcp", version: "0.1.0-alpha.1" }, verboseLogs: false },
 );
 
 const authenticatedHandler = withMcpAuth(
@@ -28,7 +47,6 @@ const authenticatedHandler = withMcpAuth(
   },
   { required: true, requiredScopes: ["magister:read"] },
 );
-
 function withHeaders(handler: (request: Request) => Promise<Response>) {
   return async (request: Request) => {
     const response = await handler(request);
