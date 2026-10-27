@@ -152,10 +152,13 @@ const grades = await client.grades(personId, {
 
 ## Messages
 
-Read inbox messages and their attachments:
+Read inbox or sent messages and their attachments:
 
 ```ts
 const inbox = await client.messages({ skip: 0, top: 20 });
+const sent = await client.sentMessages({ skip: 0, top: 20 });
+// Sent list items contain ontvangers (recipients) instead of afzender (sender).
+console.log(sent[0]?.ontvangers);
 const detail = await client.message(inbox[0].id!);
 const attachments = await client.messageAttachments(inbox[0].id!);
 
@@ -166,6 +169,7 @@ const result = await client.messageWithAttachments(inbox[0].id!);
 | Method | Returns | Description |
 | --- | --- | --- |
 | `messages(options?)` | `Promise<MessageItem[]>` | Lists inbox messages. `skip` defaults to `0`; `top` defaults to `12`. |
+| `sentMessages(options?)` | `Promise<MessageItem[]>` | Lists sent messages with recipient metadata. Same pagination defaults as `messages`. Use the existing detail and attachment methods with a sent message ID. |
 | `message(messageId)` | `Promise<MessageDetail>` | Returns one message and its body/recipient metadata. |
 | `messageAttachments(messageId)` | `Promise<MessageAttachment[]>` | Lists the attachments belonging to a message. |
 | `messageWithAttachments(messageId)` | `Promise<MessageWithAttachments>` | Returns `{ message, attachments }` in one convenience call. |

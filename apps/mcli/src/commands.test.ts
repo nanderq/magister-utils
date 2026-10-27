@@ -17,6 +17,7 @@ const cases: [string, string[], string, unknown[], unknown][] = [
   ["appointment", ["7", "--person-id", "9"], "appointment", [9, 7], { Id: 7 }],
   ["grades", ["--date", "2026-09-01", "--calculated-only", "--active-periods", "--pta-only"], "grades", [42, { peildatum: "2026-09-01", actievePerioden: true, alleenBerekendeKolommen: true, alleenPTAKolommen: true }], []],
   ["messages", ["--limit", "2", "--skip", "4"], "messages", [{ top: 2, skip: 4 }], []],
+  ["sent-messages", ["--limit", "2", "--skip", "4"], "sentMessages", [{ top: 2, skip: 4 }], []],
   ["message", ["7"], "message", [7], { id: 7 }],
   ["message", ["7", "--attachments"], "messageWithAttachments", [7], { message: { id: 7 }, attachments: [] }],
   ["message-attachments", ["7"], "messageAttachments", [7], []],
@@ -45,6 +46,14 @@ describe("SDK command routing", () => {
     const item = { id: 1, extra: "preserved" };
     const client = { messages: async () => [item] } as unknown as MagisterClient;
     expect(await execute("messages", ["--raw"], async () => client)).toMatchObject({ items: [item] });
+  });
+  test("sent messages include recipients and preserve complete raw fields", async () => {
+    const item = { id: 7, onderwerp: "Hello", ontvangers: [{ id: 3, weergavenaam: "Ada" }], heeftBijlagen: true };
+    const client = { sentMessages: async () => [item] } as unknown as MagisterClient;
+    expect(await execute("sent-messages", [], async () => client)).toMatchObject({
+      limit: 12, skip: 0, count: 1, items: [{ id: 7, subject: "Hello", recipients: ["Ada"] }],
+    });
+    expect(await execute("sent-messages", ["--raw"], async () => client)).toMatchObject({ items: [item] });
   });
   test("upload and send pass full payloads to SDK", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mcli-"));

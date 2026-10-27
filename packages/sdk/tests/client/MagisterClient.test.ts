@@ -115,6 +115,32 @@ describe("MagisterClient", () => {
         expect(client.downloadAssignmentAttachment).toBeInstanceOf(Function);
     });
 
+    test("sentMessages() retries with refreshed authentication after a 401", async () => {
+        const fetchMock = mockFetch();
+        const requests: { url: string; authorization: string | null }[] = [];
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            const url = input.toString();
+            if (url.includes("/berichten/verzondenitems/berichten?")) {
+                requests.push({ url, authorization: new Headers(init?.headers).get("authorization") });
+                return requests.length === 1
+                    ? new Response(null, { status: 401 })
+                    : Response.json({ items: [{ id: 7, ontvangers: [{ weergavenaam: "Ada" }] }] });
+            }
+            return fetchMock(input, init);
+        }) as typeof fetch;
+        const tokenStore = tempStore();
+        await tokenStore.store(storedTokens, account);
+        const client = new MagisterClient(account.tenant, account.username, "secret", tokenStore);
+
+        await expect(client.sentMessages({ skip: 3, top: 2 })).resolves.toEqual([
+            { id: 7, ontvangers: [{ weergavenaam: "Ada" }] },
+        ]);
+        expect(requests).toEqual([
+            { url: "https://school.magister.net/api/berichten/verzondenitems/berichten?skip=3&top=2", authorization: "Bearer access-token" },
+            { url: "https://school.magister.net/api/berichten/verzondenitems/berichten?skip=3&top=2", authorization: "Bearer fresh-access" },
+        ]);
+    });
+
     test("session() restores a stored session", async () => {
         globalThis.fetch = mockFetch();
         const tokenStore = tempStore();

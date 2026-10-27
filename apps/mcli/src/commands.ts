@@ -58,6 +58,13 @@ export const commands: Record<string, Command> = {
     return { schoolYearId: enrollment.id, schoolYearEnd: enrollment.einde, ...list(c, await c.client.grades(person, { peildatum: text(c, "date"), actievePerioden: c.values["active-periods"] === true, alleenBerekendeKolommen: c.values["calculated-only"] === true, alleenPTAKolommen: c.values["pta-only"] === true }), presentGrade) };
   } },
   messages: { description: "Inbox messages, paginated", flags: { ...pagination, ...rawFlag }, run: async c => { const p = page(c, 12); return { limit: p.top, skip: p.skip, ...list(c, await c.client.messages(p), presentMessage) }; } },
+  "sent-messages": { description: "Sent messages, paginated", flags: { ...pagination, ...rawFlag }, run: async c => {
+    const p = page(c, 12);
+    return { limit: p.top, skip: p.skip, ...list(c, await c.client.sentMessages(p), item => ({
+      ...presentMessage(item),
+      recipients: (item.ontvangers ?? []).map(recipient => recipient.weergavenaam ?? null).filter(Boolean),
+    })) };
+  } },
   message: { description: "Full message; optionally include attachment metadata", positional: ["id"], flags: { ...rawFlag, attachments: bool("Include attachments") }, run: async c => {
     const result = c.values.attachments ? await c.client.messageWithAttachments(c.ids[0]!) : { message: await c.client.message(c.ids[0]!), attachments: [] };
     return c.values.raw ? result : presentMessageDetail(result.message, result.attachments);

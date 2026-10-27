@@ -324,7 +324,10 @@ export interface MessageItem {
   id?: number;
   onderwerp?: string;
   afzender?: MessageSender;
+  ontvangers?: MessageRecipient[];
   heeftPrioriteit?: boolean;
+  heeftBijlagen?: boolean;
+  isGelezen?: boolean;
   verzondenOp?: string;
   [key: string]: unknown;
 }

@@ -57,6 +57,7 @@ The TUI and MCP still use the legacy shared-package token format and their own s
 ./mcli schedule --from today --to today
 ./mcli grades
 ./mcli messages --limit 20
+./mcli sent-messages --limit 20
 ./mcli message 12345 --attachments
 ./mcli assignments
 ./mcli assignment 67890

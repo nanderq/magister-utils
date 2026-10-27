@@ -27,6 +27,7 @@ import {
     getMessage,
     getMessageAttachments,
     getMessages,
+    getSentMessages,
     getMessageWithAttachments,
     searchContacts,
     sendMessage,
@@ -283,6 +284,10 @@ class MagisterClient {
 
     async messages(options: GetMessagesOptions = {}): Promise<MessageItem[]> {
         return this.withSession((session) => getMessages(session.baseUrl, session.accessToken, options));
+    }
+
+    async sentMessages(options: GetMessagesOptions = {}): Promise<MessageItem[]> {
+        return this.withSession((session) => getSentMessages(session.baseUrl, session.accessToken, options));
     }
 
     async message(messageId: number): Promise<MessageDetail> {

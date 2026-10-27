@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
     getMessageWithAttachments,
     getMessages,
+    getSentMessages,
     searchContacts,
     sendMessage,
     uploadFile,
@@ -33,6 +34,42 @@ describe("messages", () => {
             .resolves.toEqual([{ id: 7, onderwerp: "Hello" }]);
         expect(request?.url).toBe(`${baseUrl}/berichten/postvakin/berichten?skip=10&top=5`);
         expect(request?.headers.get("authorization")).toBe(`Bearer ${accessToken}`);
+    });
+
+    test("lists sent messages with pagination, authentication and recipients", async () => {
+        let request: { url: string; headers: Headers } | undefined;
+        const item = { id: 7, onderwerp: "Hello", ontvangers: [{ id: 3, weergavenaam: "Ada" }], heeftBijlagen: true };
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            request = { url: input.toString(), headers: new Headers(init?.headers) };
+            return Response.json({ items: [item], totalCount: 100 });
+        }) as typeof fetch;
+
+        await expect(getSentMessages(baseUrl, accessToken, { skip: 10, top: 5 })).resolves.toEqual([item]);
+        expect(request?.url).toBe(`${baseUrl}/berichten/verzondenitems/berichten?skip=10&top=5`);
+        expect(request?.headers.get("authorization")).toBe(`Bearer ${accessToken}`);
+        expect(request?.headers.get("accept")).toBe("application/json");
+    });
+
+    test("sent messages use default pagination and accept empty or capitalized collections", async () => {
+        const urls: string[] = [];
+        globalThis.fetch = (async (input: string | URL | Request) => {
+            urls.push(input.toString());
+            return Response.json(urls.length === 1 ? { Items: [{ id: 7 }] } : { items: [] });
+        }) as unknown as typeof fetch;
+        await expect(getSentMessages(baseUrl, accessToken)).resolves.toEqual([{ id: 7 }]);
+        await expect(getSentMessages(baseUrl, accessToken)).resolves.toEqual([]);
+        expect(urls).toEqual(Array(2).fill(`${baseUrl}/berichten/verzondenitems/berichten?skip=0&top=12`));
+    });
+
+    test("sent messages reject malformed collections and preserve HTTP errors", async () => {
+        globalThis.fetch = (async () => Response.json({ items: null })) as unknown as typeof fetch;
+        await expect(getSentMessages(baseUrl, accessToken)).rejects.toThrow(
+            "Sent messages response did not contain an items array",
+        );
+        globalThis.fetch = (async () => new Response(null, { status: 403 })) as unknown as typeof fetch;
+        const error = await getSentMessages(baseUrl, accessToken).catch(value => value);
+        expect(error).toBeInstanceOf(MagisterRequestError);
+        expect(error.status).toBe(403);
     });
 
     test("loads attachments only when the detail says they exist", async () => {

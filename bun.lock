@@ -68,7 +68,7 @@
     },
     "packages/sdk": {
       "name": "magister-sdk",
-      "version": "0.1.0-alpha.3",
+      "version": "0.1.0-alpha.4",
     },
     "packages/shared": {
       "name": "@magister/shared",

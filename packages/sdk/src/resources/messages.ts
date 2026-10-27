@@ -31,16 +31,34 @@ export async function getMessages(
     accessToken: string,
     options: GetMessagesOptions = {},
 ): Promise<MessageItem[]> {
+    return getFolderMessages(baseUrl, accessToken, "postvakin", options, "Messages");
+}
+
+export async function getSentMessages(
+    baseUrl: string,
+    accessToken: string,
+    options: GetMessagesOptions = {},
+): Promise<MessageItem[]> {
+    return getFolderMessages(baseUrl, accessToken, "verzondenitems", options, "Sent messages");
+}
+
+async function getFolderMessages(
+    baseUrl: string,
+    accessToken: string,
+    folder: "postvakin" | "verzondenitems",
+    options: GetMessagesOptions,
+    label: string,
+): Promise<MessageItem[]> {
     const query = new URLSearchParams({
         skip: String(options.skip ?? 0),
         top: String(options.top ?? 12),
     });
     const payload = await getJson<{ Items?: unknown; items?: unknown }>(
-        `${baseUrl}/berichten/postvakin/berichten?${query}`,
+        `${baseUrl}/berichten/${folder}/berichten?${query}`,
         accessToken,
-        "Messages",
+        label,
     );
-    return readItems<MessageItem>(payload, "Messages");
+    return readItems<MessageItem>(payload, label);
 }
 
 export async function getMessage(
