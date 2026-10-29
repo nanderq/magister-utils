@@ -26,8 +26,10 @@ import { createAppointment, deleteAppointment, getAppointment, getSchedule } fro
 import {
     createMessageDraft,
     deleteMessageDrafts,
+    updateMessageDraft,
     getMessage,
     getMessageAttachments,
+    getMessageDraft,
     getMessageDraftCount,
     getMessageDrafts,
     getMessages,
@@ -57,6 +59,7 @@ import type {
     MessageAttachment,
     MessageDetail,
     MessageDraft,
+    MessageDraftDetail,
     MessageItem,
     MessageWithAttachments,
     SendMessagePayload,
@@ -300,12 +303,21 @@ class MagisterClient {
         return this.withSession((session) => getMessageDrafts(session.baseUrl, session.accessToken, options));
     }
 
+    async messageDraft(draftId: number): Promise<MessageDraftDetail> {
+        return this.withSession((session) => getMessageDraft(session.baseUrl, session.accessToken, draftId));
+    }
+
     async messageDraftCount(): Promise<number> {
         return this.withSession((session) => getMessageDraftCount(session.baseUrl, session.accessToken));
     }
 
     async createMessageDraft(payload: SendMessagePayload): Promise<CreatedMessageDraft> {
         return this.withSession((session) => createMessageDraft(session.baseUrl, session.accessToken, payload));
+    }
+
+    async updateMessageDraft(draftId: number, payload: SendMessagePayload): Promise<void> {
+        return this.withSession((session) =>
+            updateMessageDraft(session.baseUrl, session.accessToken, draftId, payload));
     }
 
     async deleteMessageDrafts(draftIds: number[]): Promise<void> {

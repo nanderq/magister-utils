@@ -76,6 +76,21 @@ export const commands: Record<string, Command> = {
       hasAttachments: item.heeftBijlagen ?? false,
     })) };
   } },
+  draft: { description: "Full draft (concept) message, including its body", positional: ["id"], flags: { ...rawFlag }, run: async c => {
+    const item = await c.client.messageDraft(c.ids[0]!);
+    if (c.values.raw) return item;
+    return {
+      id: item.id ?? null,
+      subject: item.onderwerp ?? null,
+      recipients: (item.ontvangers ?? []).map(recipient => recipient.weergavenaam ?? null).filter(Boolean),
+      cc: (item.kopieOntvangers ?? []).map(recipient => recipient.weergavenaam ?? null).filter(Boolean),
+      bcc: (item.blindeKopieOntvangers ?? []).map(recipient => recipient.weergavenaam ?? null).filter(Boolean),
+      updatedAt: item.laatsteWijzigingDatumTijd ?? null,
+      hasPriority: item.heeftPrioriteit ?? false,
+      hasAttachments: item.heeftBijlagen ?? false,
+      body: item.inhoud ?? null,
+    };
+  } },
   "draft-count": { description: "Number of draft (concept) messages", run: async c => ({ count: await c.client.messageDraftCount() }) },
   message: { description: "Full message; optionally include attachment metadata", positional: ["id"], flags: { ...rawFlag, attachments: bool("Include attachments") }, run: async c => {
     const result = c.values.attachments ? await c.client.messageWithAttachments(c.ids[0]!) : { message: await c.client.message(c.ids[0]!), attachments: [] };
@@ -96,6 +111,11 @@ export const commands: Record<string, Command> = {
   "create-draft": { description: "Save SDK SendMessagePayload JSON from a file or stdin (-) as a draft; returns its ID", effect: "remote-write", flags: { "payload-file": str("JSON file path, or - for stdin", true) }, run: async c => {
     const payload = await readPayload(text(c, "payload-file")!);
     return c.client.createMessageDraft(payload);
+  } },
+  "update-draft": { description: "Replace a draft with SDK SendMessagePayload JSON from a file or stdin (-)", effect: "remote-write", positional: ["id"], flags: { "payload-file": str("JSON file path, or - for stdin", true) }, run: async c => {
+    const payload = await readPayload(text(c, "payload-file")!);
+    await c.client.updateMessageDraft(c.ids[0]!, payload);
+    return { id: c.ids[0], updated: true };
   } },
   "delete-drafts": { description: "Permanently delete draft (concept) messages by ID", effect: "remote-write", flags: { ids: str("Comma-separated draft IDs", true) }, run: async c => {
     const ids = text(c, "ids")!.split(",").map(id => integer(id.trim(), "Draft ID"));

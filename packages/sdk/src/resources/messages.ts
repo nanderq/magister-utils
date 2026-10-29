@@ -5,6 +5,7 @@ import type {
     MessageAttachment,
     MessageDetail,
     MessageDraft,
+    MessageDraftDetail,
     MessageItem,
     MessageWithAttachments,
     SendMessagePayload,
@@ -89,6 +90,18 @@ export async function getMessageDraftCount(baseUrl: string, accessToken: string)
     const count = payload.count ?? payload.Count;
     if (typeof count !== "number") throw new Error("Message draft count response did not contain a count");
     return count;
+}
+
+export async function getMessageDraft(
+    baseUrl: string,
+    accessToken: string,
+    draftId: number,
+): Promise<MessageDraftDetail> {
+    return getJson<MessageDraftDetail>(
+        `${baseUrl}/berichten/concepten/${draftId}`,
+        accessToken,
+        "Message draft",
+    );
 }
 
 export async function getMessage(
@@ -186,7 +199,7 @@ export async function sendMessage(
     accessToken: string,
     payload: SendMessagePayload,
 ): Promise<void> {
-    await postMessagePayload(`${baseUrl}/berichten/berichten`, accessToken, payload, "Send message");
+    await writeMessagePayload("POST", `${baseUrl}/berichten/berichten`, accessToken, payload, "Send message");
 }
 
 export async function createMessageDraft(
@@ -194,7 +207,8 @@ export async function createMessageDraft(
     accessToken: string,
     payload: SendMessagePayload,
 ): Promise<CreatedMessageDraft> {
-    const response = await postMessagePayload(
+    const response = await writeMessagePayload(
+        "POST",
         `${baseUrl}/berichten/concepten`,
         accessToken,
         payload,
@@ -206,6 +220,21 @@ export async function createMessageDraft(
         throw new Error("Create message draft response did not contain a draft id");
     }
     return { id };
+}
+
+export async function updateMessageDraft(
+    baseUrl: string,
+    accessToken: string,
+    draftId: number,
+    payload: SendMessagePayload,
+): Promise<void> {
+    await writeMessagePayload(
+        "PUT",
+        `${baseUrl}/berichten/concepten/${draftId}`,
+        accessToken,
+        payload,
+        "Update message draft",
+    );
 }
 
 export async function deleteMessageDrafts(
@@ -232,14 +261,15 @@ export async function deleteMessageDrafts(
     }
 }
 
-async function postMessagePayload(
+async function writeMessagePayload(
+    method: "POST" | "PUT",
     url: string,
     accessToken: string,
     payload: SendMessagePayload,
     label: string,
 ): Promise<Response> {
     const response = await fetch(url, {
-        method: "POST",
+        method,
         headers: {
             Authorization: `Bearer ${accessToken}`,
             Accept: "application/json",

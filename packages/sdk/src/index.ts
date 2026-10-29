@@ -24,6 +24,7 @@ export type {
     MessageAttachmentRef,
     MessageDetail,
     MessageDraft,
+    MessageDraftDetail,
     MessageItem,
     MessageRecipient,
     MessageRecipientRef,

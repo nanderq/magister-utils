@@ -189,14 +189,24 @@ const { id } = await client.createMessageDraft({
   inhoud: "<p>Work in progress</p>",
 });
 
+const draft = await client.messageDraft(id);
+// Updating replaces the whole draft, so send every field you want to keep.
+await client.updateMessageDraft(id, {
+  ontvangers: [{ id: recipient.id, type: "persoon" }],
+  onderwerp: draft.onderwerp ?? "",
+  inhoud: "<p>Finished</p>",
+});
+
 await client.deleteMessageDrafts([id]);
 ```
 
 | Method | Returns | Description |
 | --- | --- | --- |
 | `messageDrafts(options?)` | `Promise<MessageDraft[]>` | Lists drafts, newest first, with recipients and `laatsteWijzigingDatumTijd`. Same pagination defaults as `messages`. |
+| `messageDraft(draftId)` | `Promise<MessageDraftDetail>` | Returns one draft, including `inhoud` (HTML body) and `blindeKopieOntvangers`. |
 | `messageDraftCount()` | `Promise<number>` | Returns the number of drafts. |
 | `createMessageDraft(payload)` | `Promise<CreatedMessageDraft>` | Saves a `SendMessagePayload` as a draft without sending it and returns `{ id }`. Uses the same defaults as `sendMessage`. |
+| `updateMessageDraft(draftId, payload)` | `Promise<void>` | Replaces a draft with a `SendMessagePayload`. Omitted optional fields fall back to the `sendMessage` defaults rather than keeping their old values. |
 | `deleteMessageDrafts(draftIds)` | `Promise<void>` | Permanently deletes the given drafts in one request. Does nothing for an empty array. |
 
 ### Composing messages
@@ -227,7 +237,7 @@ await client.sendMessage({
 
 `SendMessagePayload` requires `ontvangers`, `onderwerp`, and `inhoud`. Optional fields are `kopieOntvangers`, `blindeKopieOntvangers`, `heeftPrioriteit`, `verzendOptie`, and `bijlagen`.
 
-Sending, saving or deleting drafts, and uploading modify remote Magister data. The debug script deliberately does not call these methods.
+Sending, saving, editing or deleting drafts, and uploading modify remote Magister data. The debug script deliberately does not call these methods.
 
 ## Assignments
 

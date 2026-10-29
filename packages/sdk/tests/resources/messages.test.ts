@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
     createMessageDraft,
     deleteMessageDrafts,
+    getMessageDraft,
     getMessageDraftCount,
     getMessageDrafts,
     getMessageWithAttachments,
@@ -10,6 +11,7 @@ import {
     getSentMessages,
     searchContacts,
     sendMessage,
+    updateMessageDraft,
     uploadFile,
 } from "../../src/resources/messages";
 import { MagisterRequestError } from "../../src/errors";
@@ -152,6 +154,47 @@ describe("messages", () => {
         const error = await createMessageDraft(baseUrl, accessToken, payload).catch(value => value);
         expect(error).toBeInstanceOf(MagisterRequestError);
         expect(error.status).toBe(400);
+    });
+
+    test("reads one message draft with its body", async () => {
+        let url: string | undefined;
+        const draft = { id: 28830, onderwerp: "Concept", inhoud: "<p>Een concept</p>", blindeKopieOntvangers: [], gerelateerdBerichtId: null };
+        globalThis.fetch = (async (input: string | URL | Request) => {
+            url = input.toString();
+            return Response.json(draft);
+        }) as unknown as typeof fetch;
+        await expect(getMessageDraft(baseUrl, accessToken, 28830)).resolves.toEqual(draft);
+        expect(url).toBe(`${baseUrl}/berichten/concepten/28830`);
+    });
+
+    test("updates a message draft by replacing its payload", async () => {
+        const requests: { url: string; method?: string; body?: unknown }[] = [];
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            requests.push({ url: input.toString(), method: init?.method, body: JSON.parse(String(init?.body)) });
+            return new Response(null, { status: requests.length === 1 ? 204 : 404 });
+        }) as typeof fetch;
+        const payload = {
+            ontvangers: [{ id: 57998, type: "persoon" as const }],
+            onderwerp: "Concept",
+            inhoud: "<p>Een concept met een aanpassing</p>",
+        };
+
+        await updateMessageDraft(baseUrl, accessToken, 28830, payload);
+        expect(requests[0]).toEqual({
+            url: `${baseUrl}/berichten/concepten/28830`,
+            method: "PUT",
+            body: {
+                ...payload,
+                kopieOntvangers: [],
+                blindeKopieOntvangers: [],
+                heeftPrioriteit: false,
+                verzendOptie: "standaard",
+                bijlagen: [],
+            },
+        });
+        const error = await updateMessageDraft(baseUrl, accessToken, 1, payload).catch(value => value);
+        expect(error).toBeInstanceOf(MagisterRequestError);
+        expect(error.status).toBe(404);
     });
 
     test("deletes message drafts in one request", async () => {

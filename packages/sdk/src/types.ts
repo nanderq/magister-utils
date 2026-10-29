@@ -351,6 +351,12 @@ export interface MessageDraft {
   [key: string]: unknown;
 }
 
+export interface MessageDraftDetail extends MessageDraft {
+  inhoud?: string;
+  blindeKopieOntvangers?: MessageRecipient[];
+  gerelateerdBerichtId?: number | null;
+}
+
 export interface CreatedMessageDraft {
   id: number;
 }

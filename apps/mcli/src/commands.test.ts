@@ -19,6 +19,7 @@ const cases: [string, string[], string, unknown[], unknown][] = [
   ["messages", ["--limit", "2", "--skip", "4"], "messages", [{ top: 2, skip: 4 }], []],
   ["sent-messages", ["--limit", "2", "--skip", "4"], "sentMessages", [{ top: 2, skip: 4 }], []],
   ["drafts", ["--limit", "2", "--skip", "4"], "messageDrafts", [{ top: 2, skip: 4 }], []],
+  ["draft", ["28830"], "messageDraft", [28830], { id: 28830, inhoud: "<p>Body</p>" }],
   ["draft-count", [], "messageDraftCount", [], 2],
   ["delete-drafts", ["--ids", "28829, 28828"], "deleteMessageDrafts", [[28829, 28828]], undefined],
   ["message", ["7"], "message", [7], { id: 7 }],
@@ -68,22 +69,26 @@ describe("SDK command routing", () => {
       await Bun.write(json, JSON.stringify(payload));
       let sent: unknown;
       let drafted: unknown;
+      let updated: unknown;
       const client = {
         uploadFile: async (body: Blob, options: unknown) => { expect(await body.text()).toBe("attachment contents"); expect(options).toEqual({ contentType: "text/plain" }); return { id: 3 }; },
         sendMessage: async (body: unknown) => { sent = body; },
         createMessageDraft: async (body: unknown) => { drafted = body; return { id: 28829 }; },
+        updateMessageDraft: async (id: number, body: unknown) => { updated = [id, body]; },
       } as unknown as MagisterClient;
       expect(await execute("upload-file", ["--file", file, "--content-type", "text/plain"], async () => client)).toEqual({ id: 3 });
       expect(await execute("send-message", ["--payload-file", json], async () => client)).toEqual({ sent: true });
       expect(sent).toEqual(payload);
       expect(await execute("create-draft", ["--payload-file", json], async () => client)).toEqual({ id: 28829 });
       expect(drafted).toEqual(payload);
+      expect(await execute("update-draft", ["28829", "--payload-file", json], async () => client)).toEqual({ id: 28829, updated: true });
+      expect(updated).toEqual([28829, payload]);
       await Bun.write(json, JSON.stringify({ ...payload, ontvangers: [{ id: "oops", type: "persoon" }] }));
       expect(readPayload(json)).rejects.toThrow("Invalid ontvangers");
     } finally { await rm(dir, { recursive: true }); }
   });
   test("every resource command has a routing case", () => {
-    expect(Object.keys(commands).sort()).toEqual([...new Set([...cases.map(c => c[0]), "upload-file", "send-message", "create-draft"])].sort());
+    expect(Object.keys(commands).sort()).toEqual([...new Set([...cases.map(c => c[0]), "upload-file", "send-message", "create-draft", "update-draft"])].sort());
   });
 });
 
