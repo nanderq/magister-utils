@@ -293,6 +293,24 @@ describe("messages", () => {
         });
     });
 
+    test("sends a reply linked to the original message", async () => {
+        let request: { url: string; body: Record<string, unknown> } | undefined;
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            request = { url: input.toString(), body: JSON.parse(String(init?.body)) };
+            return new Response(null, { status: 204 });
+        }) as typeof fetch;
+
+        await sendMessage(baseUrl, accessToken, {
+            ontvangers: [{ id: 3, type: "persoon" }],
+            onderwerp: "RE: Subject",
+            inhoud: "<p>Answer</p><hr><p>Original</p>",
+            verzendOptie: "beantwoord",
+            gerelateerdBerichtId: 8426121,
+        });
+        expect(request?.url).toBe(`${baseUrl}/berichten/berichten`);
+        expect(request?.body).toMatchObject({ verzendOptie: "beantwoord", gerelateerdBerichtId: 8426121 });
+    });
+
     test("uses the SDK request error for failed mutations", async () => {
         globalThis.fetch = (async () => new Response("no", { status: 413 })) as unknown as typeof fetch;
 

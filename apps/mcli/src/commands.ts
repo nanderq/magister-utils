@@ -160,7 +160,7 @@ export async function readPayload(path: string): Promise<SendMessagePayload> {
   try { payload = JSON.parse(await (path === "-" ? Bun.stdin : Bun.file(path)).text()); }
   catch { throw new InputError("Cannot read message payload as JSON"); }
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new InputError("Payload must be an object");
-  const allowed = ["ontvangers", "kopieOntvangers", "blindeKopieOntvangers", "heeftPrioriteit", "inhoud", "onderwerp", "verzendOptie", "bijlagen"];
+  const allowed = ["ontvangers", "kopieOntvangers", "blindeKopieOntvangers", "heeftPrioriteit", "inhoud", "onderwerp", "verzendOptie", "gerelateerdBerichtId", "bijlagen"];
   if (Object.keys(payload).some(k => !allowed.includes(k))) throw new InputError("Unknown message payload field");
   for (const key of ["ontvangers", "kopieOntvangers", "blindeKopieOntvangers", "bijlagen"]) {
     const refs = payload[key];
@@ -170,5 +170,6 @@ export async function readPayload(path: string): Promise<SendMessagePayload> {
   for (const key of ["inhoud", "onderwerp"]) if (typeof payload[key] !== "string" || !payload[key].trim()) throw new InputError(`${key} must be a non-empty string`);
   if (payload.heeftPrioriteit !== undefined && typeof payload.heeftPrioriteit !== "boolean") throw new InputError("heeftPrioriteit must be boolean");
   if (payload.verzendOptie !== undefined && typeof payload.verzendOptie !== "string") throw new InputError("verzendOptie must be a string");
+  if (payload.gerelateerdBerichtId !== undefined && (!Number.isSafeInteger(payload.gerelateerdBerichtId) || payload.gerelateerdBerichtId < 1)) throw new InputError("gerelateerdBerichtId must be a positive integer");
   return payload;
 }

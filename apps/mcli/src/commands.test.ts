@@ -85,6 +85,11 @@ describe("SDK command routing", () => {
       expect(updated).toEqual([28829, payload]);
       await Bun.write(json, JSON.stringify({ ...payload, ontvangers: [{ id: "oops", type: "persoon" }] }));
       expect(readPayload(json)).rejects.toThrow("Invalid ontvangers");
+      const reply = { ...payload, onderwerp: "RE: Subject", verzendOptie: "beantwoord", gerelateerdBerichtId: 8426121 };
+      await Bun.write(json, JSON.stringify(reply));
+      expect(await readPayload(json)).toMatchObject({ verzendOptie: "beantwoord", gerelateerdBerichtId: 8426121 });
+      await Bun.write(json, JSON.stringify({ ...reply, gerelateerdBerichtId: "8426121" }));
+      expect(readPayload(json)).rejects.toThrow("gerelateerdBerichtId must be a positive integer");
     } finally { await rm(dir, { recursive: true }); }
   });
   test("every resource command has a routing case", () => {

@@ -311,11 +311,13 @@ export interface StudyGuideFile {
 }
 
 export interface MessageSender {
+  id?: number;
   naam?: string;
   [key: string]: unknown;
 }
 
 export interface MessageRecipient {
+  id?: number;
   weergavenaam?: string;
   [key: string]: unknown;
 }
@@ -416,6 +418,9 @@ export interface SendMessagePayload {
   heeftPrioriteit?: boolean;
   inhoud: string;
   onderwerp: string;
+  /** "standaard" for a new message, "beantwoord" for a reply. */
   verzendOptie?: string;
+  /** The message this one answers; set together with verzendOptie "beantwoord". */
+  gerelateerdBerichtId?: number;
   bijlagen?: MessageAttachmentRef[];
 }

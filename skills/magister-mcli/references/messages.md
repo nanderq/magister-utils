@@ -19,6 +19,8 @@ Build a local JSON file so multiline content and shell metacharacters retain the
 
 Example IDs are placeholders; replace them with actual lookup results. Keep the default send mode unless a different SDK-supported value is known and requested. Optional fields may be omitted.
 
+To reply to a message, read it with `mcli message <id>`, address the reply to its `afzender.id`, prefix the subject with `RE: `, and add `"verzendOptie": "beantwoord"` and `"gerelateerdBerichtId": <id>`. The Magister web client quotes the original below the answer, separated by `<hr>`.
+
 If a file is part of the authorized message, upload it:
 
 ```bash

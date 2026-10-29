@@ -235,7 +235,25 @@ await client.sendMessage({
 | `uploadFile(body, options?)` | `Promise<UploadedAttachment>` | Uploads a `Blob`, `ArrayBuffer`, or `Uint8Array`. Set `contentType` when it cannot be inferred. |
 | `sendMessage(payload)` | `Promise<void>` | Sends a message. CC, BCC, priority, send mode, and attachments receive sensible defaults when omitted. |
 
-`SendMessagePayload` requires `ontvangers`, `onderwerp`, and `inhoud`. Optional fields are `kopieOntvangers`, `blindeKopieOntvangers`, `heeftPrioriteit`, `verzendOptie`, and `bijlagen`.
+`SendMessagePayload` requires `ontvangers`, `onderwerp`, and `inhoud`. Optional fields are `kopieOntvangers`, `blindeKopieOntvangers`, `heeftPrioriteit`, `verzendOptie`, `gerelateerdBerichtId`, and `bijlagen`.
+
+### Replying to messages
+
+A reply is an ordinary `sendMessage` call with `verzendOptie: "beantwoord"` and `gerelateerdBerichtId` set to the original message's id. The web client also prefixes the subject with `RE: ` and quotes the original below an `<hr>` in the HTML body. The SDK does not build the subject or quote for you.
+
+```ts
+const original = await client.message(messageId);
+const senderId = original.afzender?.id;
+if (senderId === undefined) throw new Error("Message has no sender to reply to");
+
+await client.sendMessage({
+  ontvangers: [{ id: senderId, type: "persoon" }],
+  onderwerp: `RE: ${original.onderwerp ?? ""}`,
+  inhoud: `<p>Thanks!</p><hr><p>${original.inhoud ?? ""}</p>`,
+  verzendOptie: "beantwoord",
+  gerelateerdBerichtId: messageId,
+});
+```
 
 Sending, saving, editing or deleting drafts, and uploading modify remote Magister data. The debug script deliberately does not call these methods.
 
