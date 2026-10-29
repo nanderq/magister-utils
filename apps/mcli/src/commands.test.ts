@@ -18,6 +18,8 @@ const cases: [string, string[], string, unknown[], unknown][] = [
   ["grades", ["--date", "2026-09-01", "--calculated-only", "--active-periods", "--pta-only"], "grades", [42, { peildatum: "2026-09-01", actievePerioden: true, alleenBerekendeKolommen: true, alleenPTAKolommen: true }], []],
   ["messages", ["--limit", "2", "--skip", "4"], "messages", [{ top: 2, skip: 4 }], []],
   ["sent-messages", ["--limit", "2", "--skip", "4"], "sentMessages", [{ top: 2, skip: 4 }], []],
+  ["drafts", ["--limit", "2", "--skip", "4"], "messageDrafts", [{ top: 2, skip: 4 }], []],
+  ["draft-count", [], "messageDraftCount", [], 2],
   ["message", ["7"], "message", [7], { id: 7 }],
   ["message", ["7", "--attachments"], "messageWithAttachments", [7], { message: { id: 7 }, attachments: [] }],
   ["message-attachments", ["7"], "messageAttachments", [7], []],
@@ -64,19 +66,23 @@ describe("SDK command routing", () => {
       const json = join(dir, "message.json");
       await Bun.write(json, JSON.stringify(payload));
       let sent: unknown;
+      let drafted: unknown;
       const client = {
         uploadFile: async (body: Blob, options: unknown) => { expect(await body.text()).toBe("attachment contents"); expect(options).toEqual({ contentType: "text/plain" }); return { id: 3 }; },
         sendMessage: async (body: unknown) => { sent = body; },
+        createMessageDraft: async (body: unknown) => { drafted = body; return { id: 28829 }; },
       } as unknown as MagisterClient;
       expect(await execute("upload-file", ["--file", file, "--content-type", "text/plain"], async () => client)).toEqual({ id: 3 });
       expect(await execute("send-message", ["--payload-file", json], async () => client)).toEqual({ sent: true });
       expect(sent).toEqual(payload);
+      expect(await execute("create-draft", ["--payload-file", json], async () => client)).toEqual({ id: 28829 });
+      expect(drafted).toEqual(payload);
       await Bun.write(json, JSON.stringify({ ...payload, ontvangers: [{ id: "oops", type: "persoon" }] }));
       expect(readPayload(json)).rejects.toThrow("Invalid ontvangers");
     } finally { await rm(dir, { recursive: true }); }
   });
   test("every resource command has a routing case", () => {
-    expect(Object.keys(commands).sort()).toEqual([...new Set([...cases.map(c => c[0]), "upload-file", "send-message"])].sort());
+    expect(Object.keys(commands).sort()).toEqual([...new Set([...cases.map(c => c[0]), "upload-file", "send-message", "create-draft"])].sort());
   });
 });
 

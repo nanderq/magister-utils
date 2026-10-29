@@ -339,6 +339,22 @@ export interface MessageDetail extends MessageItem {
   heeftBijlagen?: boolean;
 }
 
+export interface MessageDraft {
+  id?: number;
+  onderwerp?: string;
+  ontvangers?: MessageRecipient[];
+  kopieOntvangers?: MessageRecipient[];
+  heeftPrioriteit?: boolean;
+  heeftBijlagen?: boolean;
+  verzendOptie?: string;
+  laatsteWijzigingDatumTijd?: string;
+  [key: string]: unknown;
+}
+
+export interface CreatedMessageDraft {
+  id: number;
+}
+
 export interface MessageAttachment {
   id?: number;
   naam?: string;

@@ -174,6 +174,28 @@ const result = await client.messageWithAttachments(inbox[0].id!);
 | `messageAttachments(messageId)` | `Promise<MessageAttachment[]>` | Lists the attachments belonging to a message. |
 | `messageWithAttachments(messageId)` | `Promise<MessageWithAttachments>` | Returns `{ message, attachments }` in one convenience call. |
 
+### Drafts
+
+Magister calls drafts *concepten*. List them, count them, or save a new one:
+
+```ts
+const drafts = await client.messageDrafts({ skip: 0, top: 20 });
+console.log(drafts[0]?.onderwerp, drafts[0]?.laatsteWijzigingDatumTijd);
+const total = await client.messageDraftCount();
+
+const { id } = await client.createMessageDraft({
+  ontvangers: [{ id: recipient.id, type: "persoon" }],
+  onderwerp: "Report",
+  inhoud: "<p>Work in progress</p>",
+});
+```
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `messageDrafts(options?)` | `Promise<MessageDraft[]>` | Lists drafts, newest first, with recipients and `laatsteWijzigingDatumTijd`. Same pagination defaults as `messages`. |
+| `messageDraftCount()` | `Promise<number>` | Returns the number of drafts. |
+| `createMessageDraft(payload)` | `Promise<CreatedMessageDraft>` | Saves a `SendMessagePayload` as a draft without sending it and returns `{ id }`. Uses the same defaults as `sendMessage`. |
+
 ### Composing messages
 
 Search for recipients, optionally upload files, and send the message:
@@ -202,7 +224,7 @@ await client.sendMessage({
 
 `SendMessagePayload` requires `ontvangers`, `onderwerp`, and `inhoud`. Optional fields are `kopieOntvangers`, `blindeKopieOntvangers`, `heeftPrioriteit`, `verzendOptie`, and `bijlagen`.
 
-Sending and uploading modify remote Magister data. The debug script deliberately does not call these methods.
+Sending, saving drafts, and uploading modify remote Magister data. The debug script deliberately does not call these methods.
 
 ## Assignments
 

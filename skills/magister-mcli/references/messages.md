@@ -27,7 +27,15 @@ mcli upload-file --file '/path/to/report.pdf' --content-type application/pdf
 
 The result includes an attachment `id`. Put it in the message as `"bijlagen": [{"id": 456, "type": "upload"}]`. Upload alone stores a remote file; it does not send the message. The SDK has no upload rollback command.
 
-For a draft request, stop with the local payload and a readable preview. For an authorized send, run:
+For a draft request, stop with the local payload and a readable preview. Save it to the user's Magister drafts (concepten) only when they ask for that:
+
+```bash
+mcli create-draft --payload-file '/path/to/message.json'
+```
+
+It takes the same payload as `send-message`, returns the new draft's `id`, and does not send anything. `mcli drafts` and `mcli draft-count` list existing drafts.
+
+For an authorized send, run:
 
 ```bash
 mcli send-message --payload-file '/path/to/message.json'

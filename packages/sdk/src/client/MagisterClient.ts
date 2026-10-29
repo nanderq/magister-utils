@@ -24,8 +24,11 @@ import type {
 } from "../resources/assignments";
 import { createAppointment, deleteAppointment, getAppointment, getSchedule } from "../resources/schedule";
 import {
+    createMessageDraft,
     getMessage,
     getMessageAttachments,
+    getMessageDraftCount,
+    getMessageDrafts,
     getMessages,
     getSentMessages,
     getMessageWithAttachments,
@@ -40,6 +43,7 @@ import type {
     AppointmentDetail,
     CreateAppointmentPayload,
     CreatedAppointment,
+    CreatedMessageDraft,
     AssignmentDetail,
     AssignmentItem,
     AssignmentUploadSettings,
@@ -51,6 +55,7 @@ import type {
     Contact,
     MessageAttachment,
     MessageDetail,
+    MessageDraft,
     MessageItem,
     MessageWithAttachments,
     SendMessagePayload,
@@ -288,6 +293,18 @@ class MagisterClient {
 
     async sentMessages(options: GetMessagesOptions = {}): Promise<MessageItem[]> {
         return this.withSession((session) => getSentMessages(session.baseUrl, session.accessToken, options));
+    }
+
+    async messageDrafts(options: GetMessagesOptions = {}): Promise<MessageDraft[]> {
+        return this.withSession((session) => getMessageDrafts(session.baseUrl, session.accessToken, options));
+    }
+
+    async messageDraftCount(): Promise<number> {
+        return this.withSession((session) => getMessageDraftCount(session.baseUrl, session.accessToken));
+    }
+
+    async createMessageDraft(payload: SendMessagePayload): Promise<CreatedMessageDraft> {
+        return this.withSession((session) => createMessageDraft(session.baseUrl, session.accessToken, payload));
     }
 
     async message(messageId: number): Promise<MessageDetail> {

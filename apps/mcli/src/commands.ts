@@ -65,6 +65,18 @@ export const commands: Record<string, Command> = {
       recipients: (item.ontvangers ?? []).map(recipient => recipient.weergavenaam ?? null).filter(Boolean),
     })) };
   } },
+  drafts: { description: "Draft (concept) messages, paginated", flags: { ...pagination, ...rawFlag }, run: async c => {
+    const p = page(c, 12);
+    return { limit: p.top, skip: p.skip, ...list(c, await c.client.messageDrafts(p), item => ({
+      id: item.id ?? null,
+      subject: item.onderwerp ?? null,
+      recipients: (item.ontvangers ?? []).map(recipient => recipient.weergavenaam ?? null).filter(Boolean),
+      updatedAt: item.laatsteWijzigingDatumTijd ?? null,
+      hasPriority: item.heeftPrioriteit ?? false,
+      hasAttachments: item.heeftBijlagen ?? false,
+    })) };
+  } },
+  "draft-count": { description: "Number of draft (concept) messages", run: async c => ({ count: await c.client.messageDraftCount() }) },
   message: { description: "Full message; optionally include attachment metadata", positional: ["id"], flags: { ...rawFlag, attachments: bool("Include attachments") }, run: async c => {
     const result = c.values.attachments ? await c.client.messageWithAttachments(c.ids[0]!) : { message: await c.client.message(c.ids[0]!), attachments: [] };
     return c.values.raw ? result : presentMessageDetail(result.message, result.attachments);
@@ -80,6 +92,10 @@ export const commands: Record<string, Command> = {
     const payload = await readPayload(text(c, "payload-file")!);
     await c.client.sendMessage(payload);
     return { sent: true };
+  } },
+  "create-draft": { description: "Save SDK SendMessagePayload JSON from a file or stdin (-) as a draft; returns its ID", effect: "remote-write", flags: { "payload-file": str("JSON file path, or - for stdin", true) }, run: async c => {
+    const payload = await readPayload(text(c, "payload-file")!);
+    return c.client.createMessageDraft(payload);
   } },
   assignments: { description: "Paginated assignments", flags: { ...personFlag, ...pagination, ...rawFlag }, run: async c => { const p = page(c, 50); return { limit: p.top, skip: p.skip, ...list(c, await c.client.assignments(await c.person(), p), presentAssignment) }; } },
   assignment: { description: "Assignment detail and attachment metadata", positional: ["id"], flags: { ...personFlag, ...rawFlag }, run: async c => selected(c, await c.client.assignment(await c.person(), c.ids[0]!), presentAssignmentDetail) },

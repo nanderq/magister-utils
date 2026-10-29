@@ -1,8 +1,10 @@
 import { MagisterRequestError } from "../errors";
 import type {
     Contact,
+    CreatedMessageDraft,
     MessageAttachment,
     MessageDetail,
+    MessageDraft,
     MessageItem,
     MessageWithAttachments,
     SendMessagePayload,
@@ -59,6 +61,34 @@ async function getFolderMessages(
         label,
     );
     return readItems<MessageItem>(payload, label);
+}
+
+export async function getMessageDrafts(
+    baseUrl: string,
+    accessToken: string,
+    options: GetMessagesOptions = {},
+): Promise<MessageDraft[]> {
+    const query = new URLSearchParams({
+        skip: String(options.skip ?? 0),
+        top: String(options.top ?? 12),
+    });
+    const payload = await getJson<{ Items?: unknown; items?: unknown }>(
+        `${baseUrl}/berichten/concepten?${query}`,
+        accessToken,
+        "Message drafts",
+    );
+    return readItems<MessageDraft>(payload, "Message drafts");
+}
+
+export async function getMessageDraftCount(baseUrl: string, accessToken: string): Promise<number> {
+    const payload = await getJson<{ count?: unknown; Count?: unknown }>(
+        `${baseUrl}/berichten/concepten/count`,
+        accessToken,
+        "Message draft count",
+    );
+    const count = payload.count ?? payload.Count;
+    if (typeof count !== "number") throw new Error("Message draft count response did not contain a count");
+    return count;
 }
 
 export async function getMessage(
@@ -156,7 +186,34 @@ export async function sendMessage(
     accessToken: string,
     payload: SendMessagePayload,
 ): Promise<void> {
-    const url = `${baseUrl}/berichten/berichten`;
+    await postMessagePayload(`${baseUrl}/berichten/berichten`, accessToken, payload, "Send message");
+}
+
+export async function createMessageDraft(
+    baseUrl: string,
+    accessToken: string,
+    payload: SendMessagePayload,
+): Promise<CreatedMessageDraft> {
+    const response = await postMessagePayload(
+        `${baseUrl}/berichten/concepten`,
+        accessToken,
+        payload,
+        "Create message draft",
+    );
+    const path = response.headers.get("location")?.split(/[?#]/, 1)[0] ?? "";
+    const id = Number(path.match(/\/concepten\/(\d+)\/?$/)?.[1]);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+        throw new Error("Create message draft response did not contain a draft id");
+    }
+    return { id };
+}
+
+async function postMessagePayload(
+    url: string,
+    accessToken: string,
+    payload: SendMessagePayload,
+    label: string,
+): Promise<Response> {
     const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -175,10 +232,11 @@ export async function sendMessage(
     });
     if (!response.ok) {
         throw new MagisterRequestError(
-            `Send message failed (${response.status}) for ${url}`,
+            `${label} failed (${response.status}) for ${url}`,
             response.status,
         );
     }
+    return response;
 }
 
 function readItems<T>(payload: { Items?: unknown; items?: unknown }, label: string): T[] {

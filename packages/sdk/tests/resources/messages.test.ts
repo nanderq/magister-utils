@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+    createMessageDraft,
+    getMessageDraftCount,
+    getMessageDrafts,
     getMessageWithAttachments,
     getMessages,
     getSentMessages,
@@ -70,6 +73,84 @@ describe("messages", () => {
         const error = await getSentMessages(baseUrl, accessToken).catch(value => value);
         expect(error).toBeInstanceOf(MagisterRequestError);
         expect(error.status).toBe(403);
+    });
+
+    test("lists message drafts with pagination and authentication", async () => {
+        let request: { url: string; headers: Headers } | undefined;
+        const item = {
+            id: 28829,
+            onderwerp: "Nog een concept",
+            ontvangers: [{ id: 57998, weergavenaam: "Ada", type: "persoon" }],
+            kopieOntvangers: [],
+            heeftBijlagen: false,
+            verzendOptie: "standaard",
+            laatsteWijzigingDatumTijd: "2026-10-29T19:19:47.0000000Z",
+        };
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            request = { url: input.toString(), headers: new Headers(init?.headers) };
+            return Response.json({ items: [item], totalCount: 1 });
+        }) as typeof fetch;
+
+        await expect(getMessageDrafts(baseUrl, accessToken, { skip: 17, top: 17 })).resolves.toEqual([item]);
+        expect(request?.url).toBe(`${baseUrl}/berichten/concepten?skip=17&top=17`);
+        expect(request?.headers.get("authorization")).toBe(`Bearer ${accessToken}`);
+        globalThis.fetch = (async () => Response.json({ items: null })) as unknown as typeof fetch;
+        await expect(getMessageDrafts(baseUrl, accessToken)).rejects.toThrow(
+            "Message drafts response did not contain an items array",
+        );
+    });
+
+    test("reads the message draft count", async () => {
+        const urls: string[] = [];
+        globalThis.fetch = (async (input: string | URL | Request) => {
+            urls.push(input.toString());
+            return Response.json(urls.length === 1 ? { count: 2 } : {});
+        }) as unknown as typeof fetch;
+        await expect(getMessageDraftCount(baseUrl, accessToken)).resolves.toBe(2);
+        await expect(getMessageDraftCount(baseUrl, accessToken)).rejects.toThrow(
+            "Message draft count response did not contain a count",
+        );
+        expect(urls[0]).toBe(`${baseUrl}/berichten/concepten/count`);
+    });
+
+    test("creates a message draft and reads its id from the Location header", async () => {
+        let request: { url: string; method?: string; body?: unknown } | undefined;
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            request = { url: input.toString(), method: init?.method, body: JSON.parse(String(init?.body)) };
+            return new Response(null, { status: 204, headers: { location: "/api/berichten/concepten/28829" } });
+        }) as typeof fetch;
+
+        await expect(createMessageDraft(baseUrl, accessToken, {
+            ontvangers: [{ id: 57998, type: "persoon" }],
+            onderwerp: "Nog een concept",
+            inhoud: "<p>test</p>",
+        })).resolves.toEqual({ id: 28829 });
+        expect(request).toEqual({
+            url: `${baseUrl}/berichten/concepten`,
+            method: "POST",
+            body: {
+                ontvangers: [{ id: 57998, type: "persoon" }],
+                kopieOntvangers: [],
+                blindeKopieOntvangers: [],
+                heeftPrioriteit: false,
+                inhoud: "<p>test</p>",
+                onderwerp: "Nog een concept",
+                verzendOptie: "standaard",
+                bijlagen: [],
+            },
+        });
+    });
+
+    test("draft creation rejects a missing id and preserves HTTP errors", async () => {
+        const payload = { ontvangers: [], onderwerp: "", inhoud: "" };
+        globalThis.fetch = (async () => new Response(null, { status: 204 })) as unknown as typeof fetch;
+        await expect(createMessageDraft(baseUrl, accessToken, payload)).rejects.toThrow(
+            "Create message draft response did not contain a draft id",
+        );
+        globalThis.fetch = (async () => new Response(null, { status: 400 })) as unknown as typeof fetch;
+        const error = await createMessageDraft(baseUrl, accessToken, payload).catch(value => value);
+        expect(error).toBeInstanceOf(MagisterRequestError);
+        expect(error.status).toBe(400);
     });
 
     test("loads attachments only when the detail says they exist", async () => {
