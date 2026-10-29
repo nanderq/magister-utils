@@ -33,7 +33,7 @@ For a draft request, stop with the local payload and a readable preview. Save it
 mcli create-draft --payload-file '/path/to/message.json'
 ```
 
-It takes the same payload as `send-message`, returns the new draft's `id`, and does not send anything. `mcli drafts` and `mcli draft-count` list existing drafts.
+It takes the same payload as `send-message`, returns the new draft's `id`, and does not send anything. `mcli drafts` and `mcli draft-count` list existing drafts. `mcli delete-drafts --ids 1,2` deletes drafts permanently, so run it only for drafts the user named.
 
 For an authorized send, run:
 

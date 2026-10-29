@@ -188,6 +188,8 @@ const { id } = await client.createMessageDraft({
   onderwerp: "Report",
   inhoud: "<p>Work in progress</p>",
 });
+
+await client.deleteMessageDrafts([id]);
 ```
 
 | Method | Returns | Description |
@@ -195,6 +197,7 @@ const { id } = await client.createMessageDraft({
 | `messageDrafts(options?)` | `Promise<MessageDraft[]>` | Lists drafts, newest first, with recipients and `laatsteWijzigingDatumTijd`. Same pagination defaults as `messages`. |
 | `messageDraftCount()` | `Promise<number>` | Returns the number of drafts. |
 | `createMessageDraft(payload)` | `Promise<CreatedMessageDraft>` | Saves a `SendMessagePayload` as a draft without sending it and returns `{ id }`. Uses the same defaults as `sendMessage`. |
+| `deleteMessageDrafts(draftIds)` | `Promise<void>` | Permanently deletes the given drafts in one request. Does nothing for an empty array. |
 
 ### Composing messages
 
@@ -224,7 +227,7 @@ await client.sendMessage({
 
 `SendMessagePayload` requires `ontvangers`, `onderwerp`, and `inhoud`. Optional fields are `kopieOntvangers`, `blindeKopieOntvangers`, `heeftPrioriteit`, `verzendOptie`, and `bijlagen`.
 
-Sending, saving drafts, and uploading modify remote Magister data. The debug script deliberately does not call these methods.
+Sending, saving or deleting drafts, and uploading modify remote Magister data. The debug script deliberately does not call these methods.
 
 ## Assignments
 

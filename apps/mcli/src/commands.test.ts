@@ -20,6 +20,7 @@ const cases: [string, string[], string, unknown[], unknown][] = [
   ["sent-messages", ["--limit", "2", "--skip", "4"], "sentMessages", [{ top: 2, skip: 4 }], []],
   ["drafts", ["--limit", "2", "--skip", "4"], "messageDrafts", [{ top: 2, skip: 4 }], []],
   ["draft-count", [], "messageDraftCount", [], 2],
+  ["delete-drafts", ["--ids", "28829, 28828"], "deleteMessageDrafts", [[28829, 28828]], undefined],
   ["message", ["7"], "message", [7], { id: 7 }],
   ["message", ["7", "--attachments"], "messageWithAttachments", [7], { message: { id: 7 }, attachments: [] }],
   ["message-attachments", ["7"], "messageAttachments", [7], []],

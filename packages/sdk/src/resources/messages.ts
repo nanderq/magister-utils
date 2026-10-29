@@ -208,6 +208,30 @@ export async function createMessageDraft(
     return { id };
 }
 
+export async function deleteMessageDrafts(
+    baseUrl: string,
+    accessToken: string,
+    draftIds: number[],
+): Promise<void> {
+    if (draftIds.length === 0) return;
+    const url = `${baseUrl}/berichten/concepten`;
+    const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(draftIds.map(conceptId => ({ conceptId }))),
+    });
+    if (!response.ok) {
+        throw new MagisterRequestError(
+            `Delete message drafts failed (${response.status}) for ${url}`,
+            response.status,
+        );
+    }
+}
+
 async function postMessagePayload(
     url: string,
     accessToken: string,

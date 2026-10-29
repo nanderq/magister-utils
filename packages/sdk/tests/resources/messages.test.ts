@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
     createMessageDraft,
+    deleteMessageDrafts,
     getMessageDraftCount,
     getMessageDrafts,
     getMessageWithAttachments,
@@ -151,6 +152,25 @@ describe("messages", () => {
         const error = await createMessageDraft(baseUrl, accessToken, payload).catch(value => value);
         expect(error).toBeInstanceOf(MagisterRequestError);
         expect(error.status).toBe(400);
+    });
+
+    test("deletes message drafts in one request", async () => {
+        const requests: { url: string; method?: string; body?: unknown }[] = [];
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            requests.push({ url: input.toString(), method: init?.method, body: JSON.parse(String(init?.body)) });
+            return new Response(null, { status: requests.length === 1 ? 204 : 404 });
+        }) as typeof fetch;
+
+        await deleteMessageDrafts(baseUrl, accessToken, [28829, 28828]);
+        await deleteMessageDrafts(baseUrl, accessToken, []);
+        expect(requests).toEqual([{
+            url: `${baseUrl}/berichten/concepten`,
+            method: "DELETE",
+            body: [{ conceptId: 28829 }, { conceptId: 28828 }],
+        }]);
+        const error = await deleteMessageDrafts(baseUrl, accessToken, [1]).catch(value => value);
+        expect(error).toBeInstanceOf(MagisterRequestError);
+        expect(error.status).toBe(404);
     });
 
     test("loads attachments only when the detail says they exist", async () => {

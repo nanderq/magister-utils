@@ -97,6 +97,11 @@ export const commands: Record<string, Command> = {
     const payload = await readPayload(text(c, "payload-file")!);
     return c.client.createMessageDraft(payload);
   } },
+  "delete-drafts": { description: "Permanently delete draft (concept) messages by ID", effect: "remote-write", flags: { ids: str("Comma-separated draft IDs", true) }, run: async c => {
+    const ids = text(c, "ids")!.split(",").map(id => integer(id.trim(), "Draft ID"));
+    await c.client.deleteMessageDrafts(ids);
+    return { deleted: ids };
+  } },
   assignments: { description: "Paginated assignments", flags: { ...personFlag, ...pagination, ...rawFlag }, run: async c => { const p = page(c, 50); return { limit: p.top, skip: p.skip, ...list(c, await c.client.assignments(await c.person(), p), presentAssignment) }; } },
   assignment: { description: "Assignment detail and attachment metadata", positional: ["id"], flags: { ...personFlag, ...rawFlag }, run: async c => selected(c, await c.client.assignment(await c.person(), c.ids[0]!), presentAssignmentDetail) },
   "study-guides": { description: "Study guides active on a reference date (default today)", flags: { ...personFlag, ...rawFlag, ...dateFlag }, run: async c => list(c, await c.client.studyGuides(await c.person(), text(c, "date")), presentStudyGuide) },

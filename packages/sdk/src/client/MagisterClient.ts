@@ -25,6 +25,7 @@ import type {
 import { createAppointment, deleteAppointment, getAppointment, getSchedule } from "../resources/schedule";
 import {
     createMessageDraft,
+    deleteMessageDrafts,
     getMessage,
     getMessageAttachments,
     getMessageDraftCount,
@@ -305,6 +306,10 @@ class MagisterClient {
 
     async createMessageDraft(payload: SendMessagePayload): Promise<CreatedMessageDraft> {
         return this.withSession((session) => createMessageDraft(session.baseUrl, session.accessToken, payload));
+    }
+
+    async deleteMessageDrafts(draftIds: number[]): Promise<void> {
+        return this.withSession((session) => deleteMessageDrafts(session.baseUrl, session.accessToken, draftIds));
     }
 
     async message(messageId: number): Promise<MessageDetail> {
